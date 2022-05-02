@@ -147,6 +147,9 @@ class DatasetCatalog(object):
             "mode": "mask",
             "mini": 10,
         },
+        "moma": {
+            "moma_path": "moma/",
+        },
     }
 
     @staticmethod
@@ -179,6 +182,21 @@ class DatasetCatalog(object):
             attrs["img_dir"] = os.path.join(data_dir, attrs["img_dir"])
             attrs["ann_dir"] = os.path.join(data_dir, attrs["ann_dir"])
             return dict(factory="CityScapesDataset", args=attrs)
+        elif "moma" in name:
+            p = name.rfind("_")
+            name, split = name[:p], name[p+1:]
+            assert name in DatasetCatalog.DATASETS and split in {'train', 'val', 'test'}
+            data_dir = DatasetCatalog.DATA_DIR
+            args = deepcopy(DatasetCatalog.DATASETS[name])
+            for k, v in args.items():
+                args[k] = os.path.join(data_dir, v)
+            args['split'] = split
+            # IF MODEL.RELATION_ON is True, filter images with empty rels
+            # else set filter to False, because we need all images for pretraining detector
+            return dict(
+                factory="MOMADataset",
+                args=args,
+            )
         raise RuntimeError("Dataset not available: {}".format(name))
 
 

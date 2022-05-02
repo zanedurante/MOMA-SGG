@@ -10,6 +10,7 @@ from .tsv_dataset import TSVDataset, TSVYamlDataset
 from .openimages_vrd_tsv import OpenImagesVRDTSVDataset
 from .vg_tsv import VGTSVDataset
 from .od_tsv import ODTSVDataset
+from .moma_dataset import MOMADataset
 
 __all__ = [
     "COCODataset",
@@ -22,4 +23,5 @@ __all__ = [
     "OpenImagesVRDTSVDataset",
     "VGTSVDataset",
     "ODTSVDataset",
+    "MOMADataset",
 ]

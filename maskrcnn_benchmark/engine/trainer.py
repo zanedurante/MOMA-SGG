@@ -53,8 +53,10 @@ def do_train(
     checkpoint_period,
     test_period,
     arguments,
-    meters,
+    meters=None,
 ):
+    if meters is None:
+        meters = MetricLogger(delimiter="  ")
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
     max_iter = len(data_loader)

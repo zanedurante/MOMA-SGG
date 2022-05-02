@@ -31,6 +31,7 @@ class GeneralizedRCNN(nn.Module):
         self.rpn = build_rpn(cfg, self.backbone.out_channels)
         self.roi_heads = build_roi_heads(cfg, self.backbone.out_channels)
         self.force_boxes = cfg.MODEL.RPN.FORCE_BOXES
+        self.device = 'cuda' # Put on cuda
 
     def forward(self, images, targets=None):
         """

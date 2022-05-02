@@ -7,7 +7,7 @@ from .cityscapes import abs_cityscapes_evaluation
 from .sg import sg_evaluation
 from .openimages_vrd import openimages_vrd_evaluation
 from .vg import vg_evaluation
-
+from .moma import moma_evaluation
 
 def evaluate(dataset, predictions, output_folder, **kwargs):
     """evaluate dataset using different methods based on dataset type.
@@ -36,6 +36,8 @@ def evaluate(dataset, predictions, output_folder, **kwargs):
             return vg_evaluation(**args)
     elif isinstance(dataset, datasets.AbstractDataset):
         return abs_cityscapes_evaluation(**args)
+    elif isinstance(dataset, datasets.MOMADataset):
+        return moma_evaluation(**args)
     else:
         dataset_name = dataset.__class__.__name__
         raise NotImplementedError("Unsupported dataset type {}.".format(dataset_name))
