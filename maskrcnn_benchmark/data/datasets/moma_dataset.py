@@ -15,12 +15,14 @@ from momaapi import MOMA
 import os
 BOX_SCALE = 1024  # Scale at which we have the boxes
 
+from torch.utils.data import DataLoader
+
 class MOMADataset(torch.utils.data.Dataset):
 
     def __init__(self, split, moma_path='default val set in paths_catalog.py', num_instances_threshold=50, transforms=None,
                 filter_empty_rels=True, num_im=-1, num_val_im=5000,
                 filter_duplicate_rels=True, filter_non_overlap=True, flip_aug=False, custom_eval=False, custom_path='', 
-                debug=False, no_human_classes=True):
+                debug=False, no_human_classes=True, relation_on=False):
         """
         Torch dataset for MOMA
         Parameters:
@@ -80,6 +82,8 @@ class MOMADataset(torch.utils.data.Dataset):
         self.dataset_dict = self.create_dataset()
         print("DATASET HAS", len(self.dataset_dict), "examples")
 
+        self.relation_on = relation_on
+
 
     def __len__(self):
         return len(self.dataset_dict)
@@ -108,14 +112,17 @@ class MOMADataset(torch.utils.data.Dataset):
 
         assert len(boxes) == len(labels)
 
-
         #if flip_img:
         #    img = img.transpose(method=Image.FLIP_LEFT_RIGHT)
 
         if self.transforms:
             img, boxlist = self.transforms(img, boxlist)
 
+        if self.relation_on:
+            return self.dataset_dict[index]["pred_triplets"], self.dataset_dict[index]["pred_matrix"], index
+
         return img, boxlist, index
+
 
     def get_img_info(self, idx):
         # get img_height and img_width. This is used if
@@ -149,18 +156,24 @@ class MOMADataset(torch.utils.data.Dataset):
             obj_labels = []
             obj_bbs = []
 
+            obj_id_map = {}
+            count = 0
+
             for actor in ann_hoi.actors:
                 bbox = actor.bbox
                 if self.has_human_classes:
                     id = actor.id
                     actor_cname = actor.cname
                 else: # If no human classes only has generic "person" class 
-                    id = 0
+                    id = '0'
                     actor_cname = self.actor_classes[0]
                 if actor_cname in self.classes:
                     class_id = self.classes.index(actor_cname)
                     obj_labels.append(class_id)
                     obj_bbs.append([bbox.x, bbox.y, bbox.x + bbox.width, bbox.y + bbox.height])
+                if id not in obj_id_map:
+                    obj_id_map[id] = count
+                    count += 1
 
             for object in ann_hoi.objects:
                 bbox = object.bbox
@@ -171,6 +184,8 @@ class MOMADataset(torch.utils.data.Dataset):
                     class_id = self.classes.index(object_cname)
                     obj_labels.append(class_id)
                     obj_bbs.append([bbox.x, bbox.y, bbox.x + bbox.width, bbox.y + bbox.height])
+                obj_id_map[id] = count
+                count += 1
 
             record["labels"] = obj_labels
             record["bboxes"] = obj_bbs
@@ -178,6 +193,51 @@ class MOMADataset(torch.utils.data.Dataset):
             if len(obj_bbs) == 0:
                 continue # maskrcnn benchmark can only train on images with bounding boxes
 
+            # relation triplets
+            ia_triplets = []
+            ta_triplets = []
+            att_triplets = []
+            rel_triplets = []
+
+            # relation matrices
+            obj_num = len(obj_id_map)
+            ia_matrix = torch.zeros([obj_num, obj_num], dtype=torch.int64)
+            ta_matrix = torch.zeros([obj_num, obj_num], dtype=torch.int64)
+            att_matrix = torch.zeros([obj_num, obj_num], dtype=torch.int64)
+            rel_matrix = torch.zeros([obj_num, obj_num], dtype=torch.int64)
+
+            for ia in ann_hoi.ias:
+                src = '0' if ia.id_src.isalpha() and not self.has_human_classes else ia.id_src
+                ia_triplets.append((src, src, ia.cid))
+                ia_matrix[obj_id_map[src], obj_id_map[src]] = ia.cid
+            for ta in ann_hoi.tas:
+                src = '0' if ta.id_src.isalpha() and not self.has_human_classes else ta.id_src
+                trg = '0' if ta.id_trg.isalpha() and not self.has_human_classes else ta.id_trg
+                ta_triplets.append((src, trg, ta.cid))
+                ta_matrix[obj_id_map[src], obj_id_map[trg]] = ta.cid
+            for att in ann_hoi.atts:
+                src = '0' if att.id_src.isalpha() and not self.has_human_classes else att.id_src
+                att_triplets.append((src, src, att.cid))
+                att_matrix[obj_id_map[src], obj_id_map[src]] = att.cid
+            for rel in ann_hoi.rels:
+                src = '0' if rel.id_src.isalpha() and not self.has_human_classes else rel.id_src
+                trg = '0' if rel.id_trg.isalpha() and not self.has_human_classes else rel.id_trg
+                rel_triplets.append((src, trg, rel.cid))
+                rel_matrix[obj_id_map[src], obj_id_map[trg]] = rel.cid
+
+            record["pred_triplets"] = {
+                "ia": ia_triplets,
+                "ta": ta_triplets,
+                "att": att_triplets,
+                "rel": rel_triplets
+            }
+
+            record["pred_matrix"] = {
+                "ia": ia_matrix,
+                "ta": ta_matrix,
+                "att": att_matrix,
+                "rel": rel_matrix
+            }
 
             dataset_dicts.append(record)
 
