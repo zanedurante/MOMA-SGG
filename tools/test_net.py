@@ -99,9 +99,9 @@ def main():
             expected_results=cfg.TEST.EXPECTED_RESULTS,
             expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
             output_folder=output_folder,
-            skip_performance_eval=cfg.TEST.SKIP_PERFORMANCE_EVAL,
-            labelmap_file=labelmap_file,
-            save_predictions=cfg.TEST.SAVE_PREDICTIONS,
+            #skip_performance_eval=cfg.TEST.SKIP_PERFORMANCE_EVAL,
+            #labelmap_file=labelmap_file,
+            #save_predictions=cfg.TEST.SAVE_PREDICTIONS,
         )
         synchronize()
 

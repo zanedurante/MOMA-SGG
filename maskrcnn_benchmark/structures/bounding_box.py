@@ -40,6 +40,8 @@ class BoxList(object):
         self.extra_fields[field] = field_data
 
     def get_field(self, field):
+        if field not in self.extra_fields.keys():
+            raise ValueError("Field " + str(field) + " not in extra_fields.  Only has: " + str(self.extra_fields.keys()))
         return self.extra_fields[field]
 
     def has_field(self, field):

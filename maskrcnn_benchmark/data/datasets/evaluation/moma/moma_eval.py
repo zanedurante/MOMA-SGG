@@ -13,19 +13,19 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
 #import wandb
-
+import pdb
 
 def do_moma_evaluation(
     dataset,
     predictions,
     box_only,
     output_folder,
-    logger,
     iou_types,
     expected_results,
     expected_results_sigma_tol,
 ):
     print("OUTPUT TO:", output_folder)
+    logger = logging.getLogger("maskrcnn_benchmark.trainer")
     if box_only:
         logger.info("Evaluating bbox proposals")
         res = COCOResults("box_proposal")
@@ -44,7 +44,11 @@ def do_moma_evaluation(
     if "bbox" in iou_types:
         logger.info("Preparing bbox results")
         coco_results["bbox"] = prepare_for_coco_detection(predictions, dataset)
-
+    
+    if coco_results["bbox"] == []: # End early, since there are no predictions
+        logger.info("WARNING: Skipping evaluation, no bounding box predictions!")
+        return 0, 0
+    
     results = COCOResults(*iou_types)
     logger.info("Evaluating predictions")
     for iou_type in iou_types:
@@ -78,8 +82,7 @@ def do_moma_evaluation(
                     'annotations': anns,
                 }
             fauxcoco.createIndex()
-
-
+            
             res = evaluate_predictions_on_moma(
                 fauxcoco, coco_results[iou_type], file_path, iou_type
             )
@@ -94,7 +97,7 @@ def do_moma_evaluation(
 def prepare_for_coco_detection(predictions, dataset):
     # assert isinstance(dataset, COCODataset)
     coco_results = []
-    for image_id, prediction in enumerate(predictions):
+    for image_id, prediction in predictions.items():
         #original_id = dataset.id_to_img_map[image_id]
         if len(prediction) == 0:
             continue
@@ -106,8 +109,8 @@ def prepare_for_coco_detection(predictions, dataset):
         prediction = prediction.convert("xywh")
 
         boxes = prediction.bbox.tolist()
-        scores = prediction.get_field("pred_scores").tolist()
-        labels = prediction.get_field("pred_labels").tolist()
+        scores = prediction.get_field("scores").tolist()
+        labels = prediction.get_field("labels").tolist()
 
         coco_results.extend(
             [
@@ -136,7 +139,7 @@ def evaluate_box_proposals(
     gt_overlaps = []
     num_pos = 0
 
-    for image_id, prediction in enumerate(predictions):
+    for image_id, prediction in predictions.items():
         img_info = dataset.get_img_info(image_id)
         image_width = img_info["width"]
         image_height = img_info["height"]
@@ -220,7 +223,9 @@ def evaluate_predictions_on_moma(
 
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
-
+    
+    if coco_results == []:
+        coco_results = [{"image_id":0}] # COCO checks coco_results[0]
     coco_dt = coco_gt.loadRes(coco_results)
 
     # coco_dt = coco_gt.loadRes(coco_results)
