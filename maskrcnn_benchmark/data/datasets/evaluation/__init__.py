@@ -9,6 +9,8 @@ from .openimages_vrd import openimages_vrd_evaluation
 from .vg import vg_evaluation
 from .moma import moma_evaluation
 
+import pdb
+
 def evaluate(dataset, predictions, output_folder, **kwargs):
     """evaluate dataset using different methods based on dataset type.
     Args:

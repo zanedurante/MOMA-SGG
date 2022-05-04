@@ -21,8 +21,7 @@ MODEL:
     FEATURE_EXTRACTOR: "FPN2MLPFeatureExtractor"
     PREDICTOR: "FPNPredictor"
 DATASETS:
-  TRAIN: ("moma_train",) #"moma_val")
-  TEST: ("moma_val",)  # ("moma_test",)
+  TEST: ("moma_test",)  # ("moma_test",)
 DATALOADER:
   SIZE_DIVISIBILITY: 32
 SOLVER:

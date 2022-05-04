@@ -16,6 +16,7 @@ from .collate_batch import BatchCollator, BBoxAugCollator
 from .datasets.utils.config_args import config_tsv_dataset_args
 from .transforms import build_transforms
 
+import pdb
 
 def build_dataset(cfg, transforms, dataset_catalog, is_train=True):
     """
@@ -167,7 +168,7 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0, is_
 
     # If bbox aug is enabled in testing, simply set transforms to None and we will apply transforms later
     transforms = None if not is_train and cfg.TEST.BBOX_AUG.ENABLED else build_transforms(cfg, is_train)
-    datasets = build_dataset(cfg, transforms, DatasetCatalog, is_train or is_for_period)
+    datasets = build_dataset(cfg, transforms, DatasetCatalog, is_train) # Putting val set as test set during train #or is_for_period)
 
     if is_train:
         # save category_id to label name mapping

@@ -25,6 +25,9 @@ from maskrcnn_benchmark.utils.imports import import_file
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir, save_config
 
+
+import pdb
+
 # See if we can use apex.DistributedDataParallel instead of the torch default,
 # and enable mixed-precision via apex.amp
 try:
@@ -64,7 +67,11 @@ def train(cfg, local_rank, distributed):
     )
     extra_checkpoint_data = checkpointer.load(cfg.MODEL.WEIGHT)
     arguments.update(extra_checkpoint_data)
-
+    
+    # If no training datasets, return the model as is (for testing)
+    if not cfg.DATASETS.TRAIN:
+        return model
+    
     data_loader = make_data_loader(
         cfg,
         is_train=True,
@@ -79,7 +86,7 @@ def train(cfg, local_rank, distributed):
         data_loader_val = None
 
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
-
+    pdb.set_trace()
     do_train(
         cfg,
         model,
@@ -117,6 +124,7 @@ def run_test(cfg, model, distributed):
     for output_folder, dataset_name, data_loader_val in zip(output_folders, dataset_names, data_loaders_val):
         inference(
             model,
+            cfg,
             data_loader_val,
             dataset_name=dataset_name,
             iou_types=iou_types,
@@ -190,7 +198,7 @@ def main():
     logger.info("Saving config into: {}".format(output_config_path))
     # save overloaded model config in the output directory
     save_config(cfg, output_config_path)
-
+    
     model = train(cfg, args.local_rank, args.distributed)
 
     if not args.skip_test:

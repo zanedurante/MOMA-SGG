@@ -15,6 +15,7 @@ from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 from maskrcnn_benchmark.engine.inference import inference
 from maskrcnn_benchmark.utils.amp import autocast, GradScaler
 
+import pdb
 
 def reduce_loss_dict(loss_dict):
     """
@@ -55,6 +56,7 @@ def do_train(
     arguments,
     meters=None,
 ):
+
     if meters is None:
         meters = MetricLogger(delimiter="  ")
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
@@ -148,11 +150,30 @@ def do_train(
         if data_loader_val is not None and test_period > 0 and iteration % test_period == 0:
             meters_val = MetricLogger(delimiter="  ")
             synchronize()
+            """
+                    model,
+        cfg,
+        data_loader,
+        dataset_name,
+        iou_types=("bbox",),
+        box_only=False,
+        bbox_aug=False,
+        device="cuda",
+        expected_results=(),
+        expected_results_sigma_tol=4,
+        output_folder=None,
+        eval_attributes=False,
+        save_predictions=False,
+        skip_performance_eval=False,
+        labelmap_file='',
+            """
             _ = inference(  # The result can be used for additional logging, e. g. for TensorBoard
                 model,
                 # The method changes the segmentation mask format in a data loader,
                 # so every time a new data loader is created:
-                make_data_loader(cfg, is_train=False, is_distributed=(get_world_size() > 1), is_for_period=True),
+                cfg,
+                #make_data_loader(cfg, is_train=False, is_distributed=(get_world_size() > 1), is_for_period=True),
+                data_loader_val, # I don't think we need this anymore, since we aren't doing segmentation...
                 dataset_name="[Validation]",
                 iou_types=iou_types,
                 box_only=False if cfg.MODEL.RETINANET_ON else cfg.MODEL.RPN_ONLY,
