@@ -184,15 +184,15 @@ class RelPN(nn.Module):
             idx_obj = torch.arange(box_obj.shape[0]).view(1, -1, 1).repeat(box_subj.shape[0], 1, 1).to(proposals_per_image.bbox.device)
             proposal_idx_pairs = torch.cat((idx_subj.view(-1, 1), idx_obj.view(-1, 1)), 1)
 
-            keep_idx = (proposal_idx_pairs[:, 0] != proposal_idx_pairs[:, 1]).nonzero(as_tuple=False).view(-1)
+            # keep_idx = (proposal_idx_pairs[:, 0] != proposal_idx_pairs[:, 1]).nonzero(as_tuple=False).view(-1)
 
             # if we filter non overlap bounding boxes
             if self.cfg.MODEL.ROI_RELATION_HEAD.FILTER_NON_OVERLAP:
                 ious = boxlist_iou(proposals_per_image, proposals_per_image).view(-1)
-                ious = ious[keep_idx]
-                keep_idx = keep_idx[(ious > 0).nonzero(as_tuple=False).view(-1)]
-            proposal_idx_pairs = proposal_idx_pairs[keep_idx]
-            proposal_box_pairs = proposal_box_pairs[keep_idx]
+                # ious = ious[keep_idx]
+                # keep_idx = keep_idx[(ious > 0).nonzero(as_tuple=False).view(-1)]
+            # proposal_idx_pairs = proposal_idx_pairs[keep_idx]
+            # proposal_box_pairs = proposal_box_pairs[keep_idx]
             proposal_pairs_per_image = BoxPairList(proposal_box_pairs, proposals_per_image.size, proposals_per_image.mode)
             proposal_pairs_per_image.add_field("idx_pairs", proposal_idx_pairs)
 

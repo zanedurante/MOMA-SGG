@@ -163,7 +163,10 @@ def convert_predictions_to_tsv(predictions, dataset, output_folder,
                         cur_d['rect'] = boxes[i]
                         cur_d['bbox_id'] = i
                     if name == 'class':
-                        cur_d['class'] = labelmap[labels[i]]
+                        if labels[i] in labelmap:
+                            cur_d['class'] = labelmap[labels[i]]
+                        else:
+                            cur_d['class'] = "unknown"
                     if name == 'conf':
                         cur_d['conf'] = scores[i]
                     if name == 'feature':
@@ -206,7 +209,7 @@ def convert_predictions_to_tsv(predictions, dataset, output_folder,
                             cur_d['relation_feature'] = base64.b64encode(relation_features[i]).decode('utf-8')
                     triplets.append(cur_d)
             
-            yield image_key, json.dumps({'objects': objects, 'relations':triplets})
+            yield json.dumps({'objects': objects, 'relations':triplets})
     
     tsv_writer(gen_rows(), os.path.join(output_folder, output_tsv_name))
 

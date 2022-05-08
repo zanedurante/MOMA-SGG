@@ -245,15 +245,15 @@ class FastRCNNLossComputation(object):
         idx_obj = torch.arange(box_obj.shape[0]).view(1, -1, 1).repeat(box_subj.shape[0], 1, 1).to(proposals[0].bbox.device)
         proposal_idx_pairs_per_image = torch.cat((idx_subj.view(-1, 1), idx_obj.view(-1, 1)), 1)
 
-        keep_idx = (proposal_idx_pairs_per_image[:, 0] != proposal_idx_pairs_per_image[:, 1]).nonzero(as_tuple=False).view(-1)
+        # keep_idx = (proposal_idx_pairs_per_image[:, 0] != proposal_idx_pairs_per_image[:, 1]).nonzero(as_tuple=False).view(-1)
 
         # if we filter non overlap bounding boxes
         if cfg.MODEL.ROI_RELATION_HEAD.FILTER_NON_OVERLAP:
             ious = boxlist_iou(proposals[0], proposals[0]).view(-1)
-            ious = ious[keep_idx]
-            keep_idx = keep_idx[(ious > 0).nonzero(as_tuple=False).view(-1)]
-        # proposal_idx_pairs_per_image = proposal_idx_pairs_per_image[keep_idx]
-        proposal_box_pairs_per_image = proposal_box_pairs_per_image[keep_idx]
+            # ious = ious[keep_idx]
+            # keep_idx = keep_idx[(ious > 0).nonzero(as_tuple=False).view(-1)]
+
+        # proposal_box_pairs_per_image = proposal_box_pairs_per_image[keep_idx]
         proposal_box_pairs.append(proposal_box_pairs_per_image)
 
         # Add binary relationships
@@ -324,13 +324,13 @@ class FastRCNNLossComputation(object):
     def contrastive_proposal_pair_transform(self, proposals, proposal_pairs):
         for proposal_per_image, proposal_pairs_per_image in zip(proposals, proposal_pairs):
             device = proposal_per_image.bbox.device
-
             # add pseudo "idx_pairs" field for contrastive proposal pairs, so that they can be access similarly
             proposal_sub_obj = BoxList(
                     proposal_pairs_per_image.bbox.view(-1, 4),
                     proposal_pairs_per_image.size,
                     mode=proposal_pairs_per_image.mode
                 )
+
             pair_obj_iou = boxlist_iou(proposal_sub_obj, proposal_per_image)
             vals, inds = torch.max(pair_obj_iou, 1)
             assert torch.min(vals) > 0.99, "Some sub/obj is not from proposals/targets!"
@@ -384,15 +384,12 @@ class FastRCNNLossComputation(object):
             raise RuntimeError("subsample needs to be called before")
 
         proposals = self._proposal_pairs
-
         prd_label_pairs = cat([proposal.get_field("prd_label_pairs") for proposal in proposals], dim=0)
         binary_all_pairs = cat([proposal.get_field("binary_all_pairs") for proposal in proposals], dim=0)
-
         keep_idx = binary_all_pairs==1
         prd_label_pairs = prd_label_pairs[keep_idx]
         class_logits = class_logits[keep_idx]
         classification_loss = F.cross_entropy(class_logits, prd_label_pairs)
-
         return classification_loss
 
     def reldn_contrastive_losses(self, cfg, class_logits, margin=0.2):
@@ -429,7 +426,9 @@ class FastRCNNLossComputation(object):
             prd_probs_obj_pos, binary_labels_obj_pos_int32, inds_unique_obj_pos, inds_reverse_obj_pos)
         obj_contrastive_loss = F.margin_ranking_loss(obj_pair_pos_batch, obj_pair_neg_batch, obj_target, \
             margin=cfg.MODEL.ROI_RELATION_HEAD.CONTRASTIVE_LOSS.NODE_CONTRASTIVE_MARGIN)
-        
+
+        # print("sbj_contrastive_loss", sbj_contrastive_loss)
+        # print("obj_contrastive_loss", obj_contrastive_loss)
         return sbj_contrastive_loss, obj_contrastive_loss
 
     def reldn_so_contrastive_losses(self, cfg, class_logits, margin=0.2):

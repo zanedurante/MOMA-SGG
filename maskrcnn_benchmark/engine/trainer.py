@@ -77,13 +77,13 @@ def do_train(
         iou_types = iou_types + ("keypoints",)
     dataset_names = cfg.DATASETS.TEST
 
-    for iteration, data_batch in enumerate(data_loader, start_iter):
 
+    for iteration, data_batch in enumerate(tqdm(data_loader), start_iter):
         images, targets, image_ids, scales = data_batch[0], data_batch[1], data_batch[2], data_batch[3:]
-        
         if any(len(target) < 1 for target in targets):
             logger.error(f"Iteration={iteration + 1} || Image Ids used for training {_} || targets Length={[len(target) for target in targets]}" )
             continue
+
         data_time = time.time() - end
         iteration = iteration + 1
         arguments["iteration"] = iteration
@@ -152,20 +152,20 @@ def do_train(
             synchronize()
             """
                     model,
-        cfg,
-        data_loader,
-        dataset_name,
-        iou_types=("bbox",),
-        box_only=False,
-        bbox_aug=False,
-        device="cuda",
-        expected_results=(),
-        expected_results_sigma_tol=4,
-        output_folder=None,
-        eval_attributes=False,
-        save_predictions=False,
-        skip_performance_eval=False,
-        labelmap_file='',
+                    cfg,
+                    data_loader,
+                    dataset_name,
+                    iou_types=("bbox",),
+                    box_only=False,
+                    bbox_aug=False,
+                    device="cuda",
+                    expected_results=(),
+                    expected_results_sigma_tol=4,
+                    output_folder=None,
+                    eval_attributes=False,
+                    save_predictions=False,
+                    skip_performance_eval=False,
+                    labelmap_file='',
             """
             _ = inference(  # The result can be used for additional logging, e. g. for TensorBoard
                 model,
@@ -218,6 +218,8 @@ def do_train(
             checkpointer.save("model_final", **arguments)
         elif iteration % checkpoint_period == 0:
             checkpointer.save("model_{:07d}".format(iteration), **arguments)
+            # if os.path.isfile("model_{:07d}".format(iteration-1000)):
+            #     os.remove("model_{:07d}".format(iteration-1000))
 
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))

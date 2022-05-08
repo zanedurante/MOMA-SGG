@@ -8,21 +8,22 @@ import numpy as np
 from collections import defaultdict
 from tqdm import tqdm
 import random
+import os.path as op
 
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from maskrcnn_benchmark.data.datasets.vg_tsv import _box_filter
 from momaapi import MOMA
 import os
 BOX_SCALE = 1024  # Scale at which we have the boxes
 
-from torch.utils.data import DataLoader
 
 class MOMADataset(torch.utils.data.Dataset):
 
     def __init__(self, split, moma_path='default val set in paths_catalog.py', num_instances_threshold=50, transforms=None,
                 filter_empty_rels=True, num_im=-1, num_val_im=5000,
                 filter_duplicate_rels=True, filter_non_overlap=True, flip_aug=False, custom_eval=False, custom_path='', 
-                debug=False, no_human_classes=True, relation_on=False):
+                debug=False, no_human_classes=True, relation_on=True, freq_prior_file='~/../ssd/data/moma/moma.freq_prior.npy'):
         """
         Torch dataset for MOMA
         Parameters:
@@ -63,6 +64,15 @@ class MOMADataset(torch.utils.data.Dataset):
             self.actor_classes = ['person']
             
         self.classes = self.actor_classes + self.object_classes
+        self.class_to_ind = {}
+        if no_human_classes:
+            self.class_to_ind['person'] = 0
+        else:
+            for actor in self.actor_classes:
+                self.class_to_ind[actor] = self.moma.get_taxonomy("actor").index(actor)
+        for object in self.object_classes:
+            self.class_to_ind[object] = len(self.actor_classes) + self.moma.get_taxonomy("object").index(object)
+        self.ind_to_class = {v: k for k, v in self.class_to_ind.items()}
 
         print("Object detection on", len(self.classes), "classes")
 
@@ -78,11 +88,85 @@ class MOMADataset(torch.utils.data.Dataset):
         self.custom_eval = custom_eval
         assert not self.custom_eval # MOMA Does not support custom eval currently
 
+        self.relation_on = relation_on
+        self.hoi_id_map = {}
+        self.hoi_id_map['__no_relation__'] = 0
+        if self.relation_on:
+            for ia in self.moma.get_taxonomy('ia'):
+                self.hoi_id_map[ia[0]] = len(self.hoi_id_map)
+            for ta in self.moma.get_taxonomy('ta'):
+                self.hoi_id_map[ta[0]] = len(self.hoi_id_map)
+            for att in self.moma.get_taxonomy('att'):
+                self.hoi_id_map[att[0]] = len(self.hoi_id_map)
+            for rel in self.moma.get_taxonomy('rel'):
+                self.hoi_id_map[rel[0]] = len(self.hoi_id_map)
+            self.num_hoi_classes = len(self.hoi_id_map)
+            self.ind_to_relation = {v: k for k, v in self.hoi_id_map.items()}
+        print("Relation prediction on", len(self.hoi_id_map), "classes")
+
         # TODO: Implement everything (include relationships) via self.create_dataset()
         self.dataset_dict = self.create_dataset()
         print("DATASET HAS", len(self.dataset_dict), "examples")
 
-        self.relation_on = relation_on
+        if self.relation_on and self.split == 'train' and not op.exists(freq_prior_file):
+            print("Computing frequency prior matrix...")
+            fg_matrix, bg_matrix = self._get_freq_prior()
+            prob_matrix = fg_matrix.astype(np.float32)
+            prob_matrix[:, :, 0] = bg_matrix
+            prob_matrix[:, :, 0] += 1
+            prob_matrix /= np.sum(prob_matrix, 2)[:, :, None]
+            np.save(freq_prior_file, prob_matrix)
+
+    def _get_freq_prior(self, must_overlap=False):
+        fg_matrix = np.zeros((
+            len(self.classes),
+            len(self.classes),
+            self.num_hoi_classes
+        ), dtype=np.int64)
+
+        bg_matrix = np.zeros((
+            len(self.classes),
+            len(self.classes),
+        ), dtype=np.int64)
+
+        for ex_ind in range(self.__len__()):
+            target = self.get_groundtruth(ex_ind)
+            gt_classes = target.get_field('labels').numpy()
+            gt_relations = target.get_field('relation_labels').numpy()
+            gt_boxes = target.bbox
+
+            # For the foreground, we'll just look at everything
+            try:
+                o1o2 = gt_classes[gt_relations[:, :2]]
+                for (o1, o2), gtr in zip(o1o2, gt_relations[:, 2]):
+                    fg_matrix[o1, o2, gtr] += 1
+
+                # For the background, get all of the things that overlap.
+                o1o2_total = gt_classes[np.array(
+                    _box_filter(gt_boxes, must_overlap=must_overlap), dtype=int)]
+                for (o1, o2) in o1o2_total:
+                    bg_matrix[o1, o2] += 1
+            except IndexError as e:
+                assert len(gt_relations) == 0
+
+            if ex_ind % 20 == 0:
+                print("processing {}/{}".format(ex_ind, self.__len__()))
+
+        return fg_matrix, bg_matrix
+
+    def get_groundtruth(self, index):
+        # similar to __getitem__ but without transform
+        filename = self.dataset_dict[index]["file_name"]
+        boxes = self.dataset_dict[index]["bboxes"]
+        labels = torch.Tensor(self.dataset_dict[index]["labels"]).type(torch.int64)
+        img = Image.open(filename).convert("RGB")
+
+        boxlist = BoxList(boxes, img.size, mode="xyxy")
+        boxlist.add_field("labels", labels)
+        boxlist.add_field("relation_labels", self.dataset_dict[index]["pred_triplets"])
+        boxlist.add_field("pred_labels", self.dataset_dict[index]["pred_matrix"])
+
+        return boxlist
 
 
     def __len__(self):
@@ -97,7 +181,7 @@ class MOMADataset(torch.utils.data.Dataset):
         height = self.dataset_dict[index]["height"]
         width = self.dataset_dict[index]["width"]
         boxes = self.dataset_dict[index]["bboxes"]
-        labels = torch.Tensor(self.dataset_dict[index]["labels"])
+        labels = torch.Tensor(self.dataset_dict[index]["labels"]).type(torch.int64)
 
         img = Image.open(filename).convert("RGB")
         if img.size[0] != width or img.size[1] != height:
@@ -119,7 +203,9 @@ class MOMADataset(torch.utils.data.Dataset):
             img, boxlist = self.transforms(img, boxlist)
 
         if self.relation_on:
-            return self.dataset_dict[index]["pred_triplets"], self.dataset_dict[index]["pred_matrix"], index
+            boxlist.add_field("relation_labels", self.dataset_dict[index]["pred_triplets"])
+            boxlist.add_field("pred_labels",  self.dataset_dict[index]["pred_matrix"])
+            self.contrastive_loss_target_transform(boxlist)
 
         return img, boxlist, index
 
@@ -135,6 +221,8 @@ class MOMADataset(torch.utils.data.Dataset):
         ids_hoi = self.moma.get_ids_hoi(split=self.split)
         ids_hoi = sorted(ids_hoi) # Added for reproducability
         #ids_hoi = ids_hoi[120:] # Debugging
+
+
         anns_hoi = self.moma.get_anns_hoi(ids_hoi)
         image_paths = self.moma.get_paths(ids_hoi=ids_hoi)
         print("Number of examples:", len(ids_hoi))
@@ -143,6 +231,7 @@ class MOMADataset(torch.utils.data.Dataset):
         # hoi --> act --> metadata
 
         for ann_hoi, image_path in zip(anns_hoi, image_paths):
+
             record = {}
             record["file_name"] = image_path
             record["image_id"] = ann_hoi.id
@@ -155,9 +244,7 @@ class MOMADataset(torch.utils.data.Dataset):
 
             obj_labels = []
             obj_bbs = []
-
             obj_id_map = {}
-            count = 0
 
             for actor in ann_hoi.actors:
                 bbox = actor.bbox
@@ -165,15 +252,14 @@ class MOMADataset(torch.utils.data.Dataset):
                     id = actor.id
                     actor_cname = actor.cname
                 else: # If no human classes only has generic "person" class 
-                    id = '0'
+                    # id = '0'
+                    id = actor.id
                     actor_cname = self.actor_classes[0]
                 if actor_cname in self.classes:
                     class_id = self.classes.index(actor_cname)
                     obj_labels.append(class_id)
                     obj_bbs.append([bbox.x, bbox.y, bbox.x + bbox.width, bbox.y + bbox.height])
-                if id not in obj_id_map:
-                    obj_id_map[id] = count
-                    count += 1
+                    obj_id_map[id] = len(obj_id_map)
 
             for object in ann_hoi.objects:
                 bbox = object.bbox
@@ -184,8 +270,7 @@ class MOMADataset(torch.utils.data.Dataset):
                     class_id = self.classes.index(object_cname)
                     obj_labels.append(class_id)
                     obj_bbs.append([bbox.x, bbox.y, bbox.x + bbox.width, bbox.y + bbox.height])
-                obj_id_map[id] = count
-                count += 1
+                    obj_id_map[id] = len(obj_id_map)
 
             record["labels"] = obj_labels
             record["bboxes"] = obj_bbs
@@ -194,51 +279,114 @@ class MOMADataset(torch.utils.data.Dataset):
                 continue # maskrcnn benchmark can only train on images with bounding boxes
 
             # relation triplets
-            ia_triplets = []
-            ta_triplets = []
-            att_triplets = []
-            rel_triplets = []
-
+            relation_triplets = []
             # relation matrices
-            obj_num = len(obj_id_map)
-            ia_matrix = torch.zeros([obj_num, obj_num], dtype=torch.int64)
-            ta_matrix = torch.zeros([obj_num, obj_num], dtype=torch.int64)
-            att_matrix = torch.zeros([obj_num, obj_num], dtype=torch.int64)
-            rel_matrix = torch.zeros([obj_num, obj_num], dtype=torch.int64)
+            relations = torch.zeros([len(obj_labels), len(obj_labels)], dtype=torch.int64)
 
             for ia in ann_hoi.ias:
-                src = '0' if ia.id_src.isalpha() and not self.has_human_classes else ia.id_src
-                ia_triplets.append((src, src, ia.cid))
-                ia_matrix[obj_id_map[src], obj_id_map[src]] = ia.cid
+                src = ia.id_src
+                if src in obj_id_map:
+                    src_id = obj_id_map[src]
+                    predicate = self.hoi_id_map[ia.cname]
+                    relations[src_id, src_id] = predicate
+                    relation_triplets.append([src_id, src_id, predicate])
+
             for ta in ann_hoi.tas:
-                src = '0' if ta.id_src.isalpha() and not self.has_human_classes else ta.id_src
-                trg = '0' if ta.id_trg.isalpha() and not self.has_human_classes else ta.id_trg
-                ta_triplets.append((src, trg, ta.cid))
-                ta_matrix[obj_id_map[src], obj_id_map[trg]] = ta.cid
+                src = ta.id_src
+                trg = ta.id_trg
+                if src in obj_id_map and trg in obj_id_map:
+                    src_id = obj_id_map[src]
+                    trg_id = obj_id_map[trg]
+                    predicate = self.hoi_id_map[ta.cname]
+                    relations[src_id, trg_id] = predicate
+                    relation_triplets.append([src_id, trg_id, predicate])
+
             for att in ann_hoi.atts:
-                src = '0' if att.id_src.isalpha() and not self.has_human_classes else att.id_src
-                att_triplets.append((src, src, att.cid))
-                att_matrix[obj_id_map[src], obj_id_map[src]] = att.cid
+                src = att.id_src
+                if src in obj_id_map:
+                    src_id = obj_id_map[src]
+                    predicate = self.hoi_id_map[att.cname]
+                    relations[src_id, src_id] = predicate
+                    relation_triplets.append([src_id, src_id, predicate])
+
             for rel in ann_hoi.rels:
-                src = '0' if rel.id_src.isalpha() and not self.has_human_classes else rel.id_src
-                trg = '0' if rel.id_trg.isalpha() and not self.has_human_classes else rel.id_trg
-                rel_triplets.append((src, trg, rel.cid))
-                rel_matrix[obj_id_map[src], obj_id_map[trg]] = rel.cid
+                src = rel.id_src
+                trg = rel.id_trg
+                if src in obj_id_map and trg in obj_id_map:
+                    src_id = obj_id_map[src]
+                    trg_id = obj_id_map[trg]
+                    predicate = self.hoi_id_map[rel.cname]
+                    relations[src_id, trg_id] = predicate
+                    relation_triplets.append([src_id, trg_id, predicate])
 
-            record["pred_triplets"] = {
-                "ia": ia_triplets,
-                "ta": ta_triplets,
-                "att": att_triplets,
-                "rel": rel_triplets
-            }
-
-            record["pred_matrix"] = {
-                "ia": ia_matrix,
-                "ta": ta_matrix,
-                "att": att_matrix,
-                "rel": rel_matrix
-            }
+            relation_triplets = torch.tensor(relation_triplets)
+            record["pred_triplets"] = relation_triplets
+            record["pred_matrix"] = relations
 
             dataset_dicts.append(record)
 
         return dataset_dicts
+
+    def contrastive_loss_target_transform(self, target):
+        # add relationship annotations
+        relation_triplets = target.get_field("relation_labels")
+        sbj_gt_boxes = np.zeros((len(relation_triplets), 4), dtype=np.float32)
+        obj_gt_boxes = np.zeros((len(relation_triplets), 4), dtype=np.float32)
+        sbj_gt_classes_minus_1 = np.zeros(len(relation_triplets), dtype=np.int32)
+        obj_gt_classes_minus_1 = np.zeros(len(relation_triplets), dtype=np.int32)
+        prd_gt_classes_minus_1 = np.zeros(len(relation_triplets), dtype=np.int32)
+        for ix, rel in enumerate(relation_triplets):
+            # sbj
+            sbj_gt_box = target.bbox[rel[0]]
+            sbj_gt_boxes[ix] = sbj_gt_box
+            sbj_gt_classes_minus_1[ix] = target.get_field('labels')[rel[0]]
+            # obj
+            obj_gt_box = target.bbox[rel[1]]
+            obj_gt_boxes[ix] = obj_gt_box
+            obj_gt_classes_minus_1[ix] = target.get_field('labels')[rel[1]]
+            # prd
+            prd_gt_classes_minus_1[ix] = rel[2] - 1  # excludes first one
+
+        target.add_field('sbj_gt_boxes', torch.from_numpy(sbj_gt_boxes))
+        target.add_field('obj_gt_boxes', torch.from_numpy(obj_gt_boxes))
+        target.add_field('sbj_gt_classes_minus_1', torch.from_numpy(sbj_gt_classes_minus_1))
+        target.add_field('obj_gt_classes_minus_1', torch.from_numpy(obj_gt_classes_minus_1))
+        target.add_field('prd_gt_classes_minus_1', torch.from_numpy(prd_gt_classes_minus_1))
+
+        # misc
+        num_obj_classes = len(self.classes)
+        num_prd_classes = len(self.hoi_id_map) - 1
+
+        sbj_gt_overlaps = np.zeros(
+            (len(relation_triplets), num_obj_classes), dtype=np.float32)
+        for ix in range(len(relation_triplets)):
+            sbj_cls = sbj_gt_classes_minus_1[ix]
+            sbj_gt_overlaps[ix, sbj_cls] = 1.0
+        # sbj_gt_overlaps = scipy.sparse.csr_matrix(sbj_gt_overlaps)
+        target.add_field('sbj_gt_overlaps', torch.from_numpy(sbj_gt_overlaps))
+
+        obj_gt_overlaps = np.zeros(
+            (len(relation_triplets), num_obj_classes), dtype=np.float32)
+        for ix in range(len(relation_triplets)):
+            obj_cls = obj_gt_classes_minus_1[ix]
+            obj_gt_overlaps[ix, obj_cls] = 1.0
+        # obj_gt_overlaps = scipy.sparse.csr_matrix(obj_gt_overlaps)
+        target.add_field('obj_gt_overlaps', torch.from_numpy(obj_gt_overlaps))
+
+        prd_gt_overlaps = np.zeros(
+            (len(relation_triplets), num_prd_classes), dtype=np.float32)
+        pair_to_gt_ind_map = np.zeros(
+            (len(relation_triplets)), dtype=np.int32)
+        for ix in range(len(relation_triplets)):
+            prd_cls = prd_gt_classes_minus_1[ix]
+            prd_gt_overlaps[ix, prd_cls] = 1.0
+            pair_to_gt_ind_map[ix] = ix
+        # prd_gt_overlaps = scipy.sparse.csr_matrix(prd_gt_overlaps)
+        target.add_field('prd_gt_overlaps', torch.from_numpy(prd_gt_overlaps))
+        target.add_field('pair_to_gt_ind_map', torch.from_numpy(pair_to_gt_ind_map))
+
+    def get_img_info(self, index):
+        height = self.dataset_dict[index]["height"]
+        width = self.dataset_dict[index]["width"]
+        hw_dict = {"height": int(height), "width": int(width)}
+        return hw_dict

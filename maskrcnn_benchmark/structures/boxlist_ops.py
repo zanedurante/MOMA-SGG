@@ -150,6 +150,7 @@ def cat_boxlist_with_fields(bboxes, fields):
     assert all(bbox.mode == mode for bbox in bboxes)
 
     fields = set(fields)
+    bboxes[0].add_field('gt_labels', bboxes[1].get_field('gt_labels'))
     assert all(fields.issubset(set(bbox.fields())) for bbox in bboxes)
 
     cat_boxes = BoxList(_cat([bbox.bbox for bbox in bboxes], dim=0), size, mode)
