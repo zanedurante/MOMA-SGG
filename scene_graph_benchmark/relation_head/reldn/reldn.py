@@ -6,7 +6,7 @@ import torch.nn as nn
 from ..roi_relation_feature_extractors import make_roi_relation_feature_extractor
 from ..roi_relation_predictors import make_roi_relation_predictor
 from ..sparse_targets import FrequencyBias
-
+import pdb
 from .spatial import build_spatial_feature
 
 class RelDN(nn.Module):
@@ -60,7 +60,7 @@ class RelDN(nn.Module):
         for proposal, proposal_pair in zip(proposals, proposal_pairs):
             rel_ind_i = proposal_pair.get_field("idx_pairs").detach().clone()
             rel_ind_i += offset
-            offset += len(proposal)
+            #offset += len(proposal) # Not sure why this is here???
             rel_inds.append(rel_ind_i)
 
         rel_inds = torch.cat(rel_inds, 0)
@@ -74,6 +74,7 @@ class RelDN(nn.Module):
         return rel_inds, subj_pred_map, obj_pred_map
 
     def forward(self, features, proposals, proposal_pairs):
+       # pdb.set_trace()
         obj_class_logits = None
         rel_inds = []
         
@@ -96,7 +97,7 @@ class RelDN(nn.Module):
                 enumerate(zip(proposals, proposal_pairs)):
             rel_ind_i = proposal_pairs_per_image.get_field("idx_pairs").detach()
             rel_ind_i += offset
-            offset += len(proposal_per_image)
+            #offset += len(proposal_per_image)
             rel_inds.append(rel_ind_i)
 
             if self.cfg.MODEL.ROI_RELATION_HEAD.SEPERATE_SO_FEATURE_EXTRACTOR:

@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from maskrcnn_benchmark.utils.miscellaneous import mkdir, load_from_yaml_file, write_to_yaml_file
 from maskrcnn_benchmark.structures.tsv_file import TSVFile
-
+import pdb
 
 def img_from_base64(imagestring):
     try:
@@ -39,15 +39,16 @@ def tsv_writer(values, tsv_file, sep='\t'):
     lineidx_file_tmp = lineidx_file + '.tmp'
     with open(tsv_file_tmp, 'w') as fp, open(lineidx_file_tmp, 'w') as fpidx:
         assert values is not None
-        for value in values:
+        for idx, value in enumerate(values):
             assert value is not None
             # this step makes sure python2 and python3 encoded img string are the same.
             # for python2 encoded image string, it is a str class starts with "/".
             # for python3 encoded image string, it is a bytes class starts with "b'/".
             # v.decode('utf-8') converts bytes to str so the content is the same.
             # v.decode('utf-8') should only be applied to bytes class type. 
-            value = [v if type(v)!=bytes else v.decode('utf-8') for v in value]
-            v = '{0}\n'.format(sep.join(map(str, value)))
+            #value = [v if type(v)!=bytes else v.decode('utf-8') for v in value]
+            #v = '{0}\n'.format(sep.join(map(str, value)))
+            v = '{0}\t{1}\n'.format(idx, value)
             fp.write(v)
             fpidx.write(str(idx) + '\n')
             idx = idx + len(v)

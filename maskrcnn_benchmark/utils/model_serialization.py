@@ -106,6 +106,8 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict, skip_unmat
                 # if layer weights does not match in size, skip this layer
                 logger.info(
                     "SKIPPING LAYER {} because of size mis-match".format(key))
+                logger.info("Loaded shape: {}, model shape: {}".format(
+                        loaded_state_dict[key_old].shape,  model_state_dict[key].shape))
             continue
         model_state_dict[key] = loaded_state_dict[key_old]
         logger.info(

@@ -9,18 +9,20 @@ import torch
 from maskrcnn_benchmark.structures.tsv_file_ops import tsv_reader
 from .evaluator import BasicSceneGraphEvaluator
 from .box import bbox_overlaps
-
+import pdb
 
 def do_sg_evaluation(dataset, predictions, output_folder, logger):
     """
     scene graph generation evaluation
     """
-
     prediction_file = os.path.join(output_folder, 'predictions.tsv')
 
     gt_dicts = prepare_vrd_groundtruths(dataset)
-
-    predict_dicts = prepare_vrd_predictions(prediction_file, dataset.labelmap)
+    
+    if hasattr(dataset, 'labelmap'):
+        predict_dicts = prepare_vrd_predictions(prediction_file, dataset.labelmap)
+    else:
+        predict_dicts = prepare_vrd_predictions_no_labelmap(prediction_file, dataset)
 
     evaluator = BasicSceneGraphEvaluator.all_modes(multiple_preds=False)
 
@@ -159,7 +161,6 @@ def evaluate(gt_classes, gt_boxes, gt_rels,
     relations = rel_inds.numpy()
 
     # if relations.shape[0] != num_boxes * (num_boxes - 1):
-    # pdb.set_trace()
 
     # assert(relations.shape[0] == num_boxes * (num_boxes - 1))
     assert (predicates.shape[0] == relations.shape[0])
@@ -390,6 +391,33 @@ def prepare_vrd_predictions(pred_tsv_file, labelmap):
 
         predictions_dict[img_key] = {'bboxes':torch.as_tensor(bboxes).reshape(-1, 4) , 'bbox_scores':torch.tensor(bbox_scores), 'bbox_labels':torch.tensor(bbox_labels), 'relation_pairs':torch.tensor(idx_pairs), 'relation_scores':torch.tensor(relation_scores), 'relation_scores_all':torch.tensor(relation_scores_all), 'relation_labels':torch.tensor(relation_labels)}
     return predictions_dict
+
+
+def prepare_vrd_predictions_no_labelmap(pred_tsv_file, dataset):
+    predictions_dict = defaultdict(dict)
+    for row in tsv_reader(pred_tsv_file):
+        img_key = row[0]
+        predictions = json.loads(row[1])
+        bboxes = []
+        bbox_scores = []
+        bbox_labels = []
+        for obj in predictions['objects']:
+            bboxes.append(obj['rect'])
+            bbox_scores.append(obj['conf'])
+            bbox_labels.append(dataset.class_to_ind[obj['class']])
+        idx_pairs = []
+        relation_scores = []
+        relation_scores_all = []
+        relation_labels = []
+        for triplet in predictions['relations']:
+            idx_pairs.append([triplet['subj_id'], triplet['obj_id']])
+            relation_scores.append(triplet['conf'])
+            relation_scores_all.append(np.frombuffer(base64.b64decode(triplet['scores_all']), np.float32))
+            relation_labels.append(dataset.relation_to_ind[triplet['class']])
+
+        predictions_dict[img_key] = {'bboxes':torch.as_tensor(bboxes).reshape(-1, 4) , 'bbox_scores':torch.tensor(bbox_scores), 'bbox_labels':torch.tensor(bbox_labels), 'relation_pairs':torch.tensor(idx_pairs), 'relation_scores':torch.tensor(relation_scores), 'relation_scores_all':torch.tensor(relation_scores_all), 'relation_labels':torch.tensor(relation_labels)}
+    return predictions_dict
+
 
 def prepare_vrd_groundtruths(dataset):
     gt_dict = defaultdict(dict)

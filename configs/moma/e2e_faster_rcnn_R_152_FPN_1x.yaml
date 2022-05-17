@@ -1,8 +1,8 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-101"
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-152"
   BACKBONE:
-    CONV_BODY: "R-101-FPN"
+    CONV_BODY: "R-152-FPN"
   RESNETS:
     BACKBONE_OUT_CHANNELS: 256
   RPN:
@@ -20,7 +20,9 @@ MODEL:
     POOLER_SAMPLING_RATIO: 2
     FEATURE_EXTRACTOR: "FPN2MLPFeatureExtractor"
     PREDICTOR: "FPNPredictor"
+  
 DATASETS:
+  TRAIN: ("moma_train",) #"moma_val")
   TEST: ("moma_val",)  # ("moma_test",)
 DATALOADER:
   SIZE_DIVISIBILITY: 32
@@ -31,4 +33,4 @@ SOLVER:
   MAX_ITER: 90000
   TEST_PERIOD: 10
   CHECKPOINT_PERIOD: 10000
-OUTPUT_DIR: "output/obj_detection"
+OUTPUT_DIR: "inference/res152/"

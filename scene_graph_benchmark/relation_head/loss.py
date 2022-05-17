@@ -14,6 +14,7 @@ from .balanced_positive_negative_pair_sampler import BalancedPositiveNegativePai
 from maskrcnn_benchmark.modeling.utils import cat
 from .contrastive_loss_sample_pairs import add_rel_blobs, add_rel_proposals
 
+import pdb
 
 class FastRCNNLossComputation(object):
     """

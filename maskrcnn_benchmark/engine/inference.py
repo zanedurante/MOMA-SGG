@@ -20,7 +20,7 @@ from ..utils.comm import all_gather, gather_on_master
 from ..utils.comm import synchronize
 from ..utils.timer import Timer, get_time_str
 from .bbox_aug import im_detect_bbox_aug
-
+import pdb
 
 def compute_on_dataset(model, data_loader, device, bbox_aug, timer=None):
     model.eval()
@@ -46,7 +46,8 @@ def compute_on_dataset(model, data_loader, device, bbox_aug, timer=None):
                 if not device.type == 'cpu':
                     torch.cuda.synchronize()
                 timer.toc()
-            output = [o.to(cpu_device) for o in output]
+            output = [o.to(cpu_device) for o in output] # Getting error when accumulating on cpu
+            
         results_dict.update(
             {img_id: result for img_id, result in zip(image_ids, output)}
         )
@@ -148,7 +149,7 @@ def convert_predictions_to_tsv(predictions, dataset, output_folder,
             if "attr_scores_all" in data_subset:
                 attr_scores_all = prediction.get_field("attr_scores_all").numpy()
             if 'relations' in data_subset:
-                relations = relations.tolist()
+                relations = relations.tolist() # Why + 1? (because 0 = no relation)
                 predicates = [relation_labelmap[rel+1] for rel in predicates.tolist()]
             if 'relation_scores' in data_subset:
                 relation_scores = relation_scores.tolist()
@@ -166,6 +167,7 @@ def convert_predictions_to_tsv(predictions, dataset, output_folder,
                         if labels[i] in labelmap:
                             cur_d['class'] = labelmap[labels[i]]
                         else:
+                            print("UNKNOWN CLASS: ", labels[i], "label map has:", labelmap)
                             cur_d['class'] = "unknown"
                     if name == 'conf':
                         cur_d['conf'] = scores[i]
@@ -210,9 +212,8 @@ def convert_predictions_to_tsv(predictions, dataset, output_folder,
                     triplets.append(cur_d)
             
             yield json.dumps({'objects': objects, 'relations':triplets})
-    
-    tsv_writer(gen_rows(), os.path.join(output_folder, output_tsv_name))
-
+    rows = gen_rows()
+    tsv_writer(rows, os.path.join(output_folder, output_tsv_name))
 
 def inference(
         model,
@@ -280,12 +281,10 @@ def inference(
             num_devices,
         )
     )
-
     predictions = _accumulate_predictions_from_multiple_gpus(predictions, cfg.TEST.GATHER_ON_CPU)
 
     if not is_main_process():
         return
-
     if output_folder and save_predictions:
         torch.save(predictions, os.path.join(output_folder, output_pth_name))
     

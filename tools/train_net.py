@@ -86,7 +86,7 @@ def train(cfg, local_rank, distributed):
         data_loader_val = None
 
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
-    pdb.set_trace()
+    #pdb.set_trace()
     do_train(
         cfg,
         model,

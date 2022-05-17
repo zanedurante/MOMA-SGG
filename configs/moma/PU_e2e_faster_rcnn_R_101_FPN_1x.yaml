@@ -20,7 +20,9 @@ MODEL:
     POOLER_SAMPLING_RATIO: 2
     FEATURE_EXTRACTOR: "FPN2MLPFeatureExtractor"
     PREDICTOR: "FPNPredictor"
+  
 DATASETS:
+  TRAIN: ("moma_train",) #"moma_val")
   TEST: ("moma_val",)  # ("moma_test",)
 DATALOADER:
   SIZE_DIVISIBILITY: 32
@@ -29,6 +31,6 @@ SOLVER:
   WEIGHT_DECAY: 0.0001
   STEPS: (60000, 80000)
   MAX_ITER: 90000
-  TEST_PERIOD: 10
+  TEST_PERIOD: 1000
   CHECKPOINT_PERIOD: 10000
-OUTPUT_DIR: "output/obj_detection"
+OUTPUT_DIR: "./inference/pu/"

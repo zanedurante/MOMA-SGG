@@ -12,10 +12,67 @@ from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
+from maskrcnn_benchmark.data.datasets.evaluation.sg.sg_tsv_eval import do_sg_evaluation
+
+from scene_graph_benchmark.scene_parser import SceneParserOutputs
+
 #import wandb
 import pdb
 
 def do_moma_evaluation(
+    dataset,
+    predictions,
+    box_only,
+    output_folder,
+    iou_types,
+    expected_results,
+    expected_results_sigma_tol,
+):
+    if isinstance(predictions[0], SceneParserOutputs):
+        return do_moma_graph_evaluation(
+            dataset,
+            predictions,
+            box_only,
+            output_folder,
+            iou_types,
+            expected_results,
+            expected_results_sigma_tol,
+        )
+    else:
+        return do_moma_object_evaluation(
+            dataset,
+            predictions,
+            box_only,
+            output_folder,
+            iou_types,
+            expected_results,
+            expected_results_sigma_tol,
+        )
+
+def do_moma_graph_evaluation(
+    dataset,
+    predictions,
+    box_only,
+    output_folder,
+    iou_types,
+    expected_results,
+    expected_results_sigma_tol,
+):
+  #  obj_preds = {k: v.predictions for k,v in predictions.items()}
+  #  do_moma_object_evaluation(
+  #      dataset,
+  #      obj_preds,
+  #      box_only,
+  #      output_folder,
+  #      iou_types,
+  #      expected_results,
+  #      expected_results_sigma_tol
+  #  )
+    logger = logging.getLogger("maskrcnn_benchmark.trainer")
+    return do_sg_evaluation(dataset, predictions, output_folder, logger)
+    
+
+def do_moma_object_evaluation(
     dataset,
     predictions,
     box_only,
@@ -44,7 +101,6 @@ def do_moma_evaluation(
     if "bbox" in iou_types:
         logger.info("Preparing bbox results")
         coco_results["bbox"] = prepare_for_coco_detection(predictions, dataset)
-    
     if coco_results["bbox"] == []: # End early, since there are no predictions
         logger.info("WARNING: Skipping evaluation, no bounding box predictions!")
         return 0, 0
@@ -58,8 +114,12 @@ def do_moma_evaluation(
                 file_path = os.path.join(output_folder, iou_type + ".json")
 
             anns = []
-            assert len(dataset.dataset_dict) == len(predictions)
-            for image_id, entry in enumerate(dataset.dataset_dict):
+            if dataset.debug:
+                dataset_dict = dataset.dataset_dict[len(dataset):]
+            else:
+                assert len(dataset.dataset_dict) == len(predictions)
+                dataset_dict = dataset.dataset_dict
+            for image_id, entry in enumerate(dataset_dict):
                 labels = entry["labels"]
                 boxes = entry["bboxes"]
                 for cls, box in zip(labels, boxes):
@@ -74,7 +134,7 @@ def do_moma_evaluation(
             fauxcoco = COCO()
             fauxcoco.dataset = {
                     'info': {'description': 'use coco script for moma detection evaluation'},
-                    'images': [{'id': i} for i in range(len(coco_results["bbox"]))],
+                    'images': [{'id': i} for i in range(len(dataset_dict))],
                     'categories': [
                         {'supercategory': 'person', 'id': i, 'name': name} 
                         for i, name in enumerate(dataset.classes) if name != '__background__'

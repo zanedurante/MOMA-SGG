@@ -13,6 +13,7 @@ from maskrcnn_benchmark.modeling.backbone import build_backbone
 from .relation_head.roi_relation_box_feature_extractors import make_roi_relation_box_feature_extractor
 from .attribute_head.attribute_head import build_roi_attribute_head
 
+import pdb
 
 class SceneParserOutputs(object):
     """

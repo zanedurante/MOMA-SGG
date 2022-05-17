@@ -19,11 +19,11 @@ BOX_SCALE = 1024  # Scale at which we have the boxes
 
 
 class MOMADataset(torch.utils.data.Dataset):
-
+    
     def __init__(self, split, moma_path='default val set in paths_catalog.py', num_instances_threshold=50, transforms=None,
                 filter_empty_rels=True, num_im=-1, num_val_im=5000,
                 filter_duplicate_rels=True, filter_non_overlap=True, flip_aug=False, custom_eval=False, custom_path='', 
-                debug=False, no_human_classes=True, relation_on=True, freq_prior_file='~/../ssd/data/moma/moma.freq_prior.npy'):
+                debug=False, no_human_classes=True, relation_on=True, freq_prior_file='/home/ssd/data/moma/moma.freq_prior.npy'):
         """
         Torch dataset for MOMA
         Parameters:
@@ -45,14 +45,15 @@ class MOMADataset(torch.utils.data.Dataset):
         # num_val_im = 4
         assert split in {'train', 'val', 'test'}
         print("getting split:", split)
-        if debug:
-            self.moma = MOMA(moma_path, load_val=True, toy=True)
-            self.actor_classes = self.moma.get_cnames(concept='actor')
-            self.object_classes = self.moma.get_cnames(concept='object')
-        else:
-            self.moma = MOMA(moma_path, load_val=True) # Save moma API object
-            self.actor_classes = self.moma.get_cnames(concept='actor', threshold=num_instances_threshold, split='either') # Only train on actors and objects from val set
-            self.object_classes = self.moma.get_cnames(concept='object', threshold=num_instances_threshold, split='either') # Ensure there are at least 50 examples to include
+        #if debug:
+        #    self.moma = MOMA(moma_path, load_val=True, toy=True)
+        #    self.actor_classes = self.moma.get_cnames(concept='actor')
+        #    self.object_classes = self.moma.get_cnames(concept='object')
+        #else:
+        self.debug = debug
+        self.moma = MOMA(moma_path, load_val=True) # Save moma API object
+        self.actor_classes = self.moma.get_cnames(kind='actor', threshold=num_instances_threshold, split='either') # Only train on actors and objects from val set
+        self.object_classes = self.moma.get_cnames(kind='object', threshold=num_instances_threshold, split='either') # Ensure there are at least 50 examples to include
 
         if 'crowd' in self.actor_classes:
             self.actor_classes.remove('crowd')
@@ -68,13 +69,15 @@ class MOMADataset(torch.utils.data.Dataset):
         if no_human_classes:
             self.class_to_ind['person'] = 0
         else:
-            for actor in self.actor_classes:
-                self.class_to_ind[actor] = self.moma.get_taxonomy("actor").index(actor)
-        for object in self.object_classes:
-            self.class_to_ind[object] = len(self.actor_classes) + self.moma.get_taxonomy("object").index(object)
+            for idx, actor in enumerate(self.actor_classes):
+                self.class_to_ind[actor] = idx
+        for idx, object in enumerate(self.object_classes):
+            self.class_to_ind[object] = len(self.actor_classes) + idx
+            
         self.ind_to_class = {v: k for k, v in self.class_to_ind.items()}
 
         print("Object detection on", len(self.classes), "classes")
+        print("Class list:", self.classes)
 
         self.flip_aug = flip_aug
         self.split = split
@@ -92,13 +95,13 @@ class MOMADataset(torch.utils.data.Dataset):
         self.hoi_id_map = {}
         self.hoi_id_map['__no_relation__'] = 0
         if self.relation_on:
-            for ia in self.moma.get_taxonomy('ia'):
+            for ia in self.moma.taxonomy['ia']:
                 self.hoi_id_map[ia[0]] = len(self.hoi_id_map)
-            for ta in self.moma.get_taxonomy('ta'):
+            for ta in self.moma.taxonomy['ta']:
                 self.hoi_id_map[ta[0]] = len(self.hoi_id_map)
-            for att in self.moma.get_taxonomy('att'):
+            for att in self.moma.taxonomy['att']:
                 self.hoi_id_map[att[0]] = len(self.hoi_id_map)
-            for rel in self.moma.get_taxonomy('rel'):
+            for rel in self.moma.taxonomy['rel']:
                 self.hoi_id_map[rel[0]] = len(self.hoi_id_map)
             self.num_hoi_classes = len(self.hoi_id_map)
             self.ind_to_relation = {v: k for k, v in self.hoi_id_map.items()}
@@ -106,7 +109,7 @@ class MOMADataset(torch.utils.data.Dataset):
 
         # TODO: Implement everything (include relationships) via self.create_dataset()
         self.dataset_dict = self.create_dataset()
-        print("DATASET HAS", len(self.dataset_dict), "examples")
+        print("DATASET HAS:", self.__len__(), "examples")
 
         if self.relation_on and self.split == 'train' and not op.exists(freq_prior_file):
             print("Computing frequency prior matrix...")
@@ -170,6 +173,8 @@ class MOMADataset(torch.utils.data.Dataset):
 
 
     def __len__(self):
+        if self.debug:
+            return 40 # For faster debugging
         return len(self.dataset_dict)
 
     def __getitem__(self, index):
@@ -216,7 +221,10 @@ class MOMADataset(torch.utils.data.Dataset):
         # of the image, as it can be more efficient than loading the
         # image from disk
         return {"height": self.dataset_dict[idx]["height"], "width": self.dataset_dict[idx]["width"]}
-
+    
+    def get_img_key(self, idx):
+        return idx
+    
     def create_dataset(self):
         ids_hoi = self.moma.get_ids_hoi(split=self.split)
         ids_hoi = sorted(ids_hoi) # Added for reproducability
@@ -225,7 +233,6 @@ class MOMADataset(torch.utils.data.Dataset):
 
         anns_hoi = self.moma.get_anns_hoi(ids_hoi)
         image_paths = self.moma.get_paths(ids_hoi=ids_hoi)
-        print("Number of examples:", len(ids_hoi))
         dataset_dicts = []
 
         # hoi --> act --> metadata
@@ -280,6 +287,7 @@ class MOMADataset(torch.utils.data.Dataset):
 
             # relation triplets
             relation_triplets = []
+            relation_set = set()
             # relation matrices
             relations = torch.zeros([len(obj_labels), len(obj_labels)], dtype=torch.int64)
 
@@ -318,13 +326,16 @@ class MOMADataset(torch.utils.data.Dataset):
                     predicate = self.hoi_id_map[rel.cname]
                     relations[src_id, trg_id] = predicate
                     relation_triplets.append([src_id, trg_id, predicate])
-
+            
             relation_triplets = torch.tensor(relation_triplets)
             record["pred_triplets"] = relation_triplets
             record["pred_matrix"] = relations
 
             dataset_dicts.append(record)
-
+        
+        # Create relation_to_ind --> not sure if this is right!
+        self.relation_to_ind = self.hoi_id_map # For compatibility with repo
+        
         return dataset_dicts
 
     def contrastive_loss_target_transform(self, target):
@@ -384,9 +395,9 @@ class MOMADataset(torch.utils.data.Dataset):
         # prd_gt_overlaps = scipy.sparse.csr_matrix(prd_gt_overlaps)
         target.add_field('prd_gt_overlaps', torch.from_numpy(prd_gt_overlaps))
         target.add_field('pair_to_gt_ind_map', torch.from_numpy(pair_to_gt_ind_map))
-
-    def get_img_info(self, index):
-        height = self.dataset_dict[index]["height"]
-        width = self.dataset_dict[index]["width"]
-        hw_dict = {"height": int(height), "width": int(width)}
-        return hw_dict
+    # Already defined above...
+    #def get_img_info(self, index):
+    #    height = self.dataset_dict[index]["height"]
+    #    width = self.dataset_dict[index]["width"]
+    #    hw_dict = {"height": int(height), "width": int(width)}
+    #    return hw_dict

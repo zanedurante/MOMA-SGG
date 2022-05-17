@@ -78,7 +78,8 @@ def do_train(
     dataset_names = cfg.DATASETS.TEST
 
 
-    for iteration, data_batch in enumerate(tqdm(data_loader), start_iter):
+    #for iteration, data_batch in enumerate(tqdm(data_loader, max_iter-start_iter), start_iter):
+    for iteration, data_batch in enumerate(data_loader, start_iter):
         images, targets, image_ids, scales = data_batch[0], data_batch[1], data_batch[2], data_batch[3:]
         if any(len(target) < 1 for target in targets):
             logger.error(f"Iteration={iteration + 1} || Image Ids used for training {_} || targets Length={[len(target) for target in targets]}" )
@@ -180,7 +181,7 @@ def do_train(
                 device=cfg.MODEL.DEVICE,
                 expected_results=cfg.TEST.EXPECTED_RESULTS,
                 expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
-                output_folder=None,
+                output_folder="output/sgg_val_outputs/",
             )
             synchronize()
             model.train()
