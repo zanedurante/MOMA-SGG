@@ -327,6 +327,9 @@ class MOMADataset(torch.utils.data.Dataset):
                     relations[src_id, trg_id] = predicate
                     relation_triplets.append([src_id, trg_id, predicate])
             
+            if len(relation_triplets) == 0:
+                continue # scene_graph_benchmark can only train on relationships that exist (have bounding boxes)
+            
             relation_triplets = torch.tensor(relation_triplets)
             record["pred_triplets"] = relation_triplets
             record["pred_matrix"] = relations
