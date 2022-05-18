@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "SceneParser"
-  WEIGHT: "/home/ssd/data/models/obj_det_model_final.pth"
+  WEIGHT: "/home/ssd/data/models/test_model_weights_only.pth"
   USE_FREQ_PRIOR: False
   FREQ_PRIOR: "moma.freq_prior.npy"
   RESNETS:
@@ -73,18 +73,18 @@ SOLVER:
   WEIGHT_DECAY: 0.0001
   MAX_ITER: 40000
   STEPS: (20000,30000)
-  IMS_PER_BATCH: 4
+  IMS_PER_BATCH: 1
   TEST_PERIOD: 10
   CHECKPOINT_PERIOD: 5000
 TEST:
-  IMS_PER_BATCH: 4
+  IMS_PER_BATCH: 1
   SAVE_PREDICTIONS: False
   SAVE_RESULTS_TO_TSV: True
   TSV_SAVE_SUBSET: ['rect', 'class', 'conf', 'relations', 'relation_scores', 'relation_scores_all']
-  GATHER_ON_CPU: False # When True, gets RuntimeError: Tensors must be CUDA and dense
+  GATHER_ON_CPU: True # When True, gets RuntimeError: Tensors must be CUDA and dense
   SKIP_PERFORMANCE_EVAL: False
   OUTPUT_RELATION_FEATURE: False
   OUTPUT_FEATURE: True # need this to output scores_all and box_all
-OUTPUT_DIR: "./sgg_output/new_try_moma/"
+OUTPUT_DIR: "./output"
 DATA_DIR: "./datasets/moma"
 DISTRIBUTED_BACKEND: 'gloo'
