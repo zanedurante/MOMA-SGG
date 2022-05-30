@@ -98,16 +98,16 @@ class ROIRelationHead(torch.nn.Module):
             proposal_label_pairs = torch.cat(
                 (label_subj.view(-1, 1), label_obj.view(-1, 1)), 1)
 
-            # keep_idx = (proposal_idx_pairs[:, 0] != proposal_idx_pairs[:, 1]).nonzero(as_tuple=False).view(-1)
+            keep_idx = (proposal_idx_pairs[:, 0] != proposal_idx_pairs[:, 1]).nonzero(as_tuple=False).view(-1)
 
             # if we filter non overlap bounding boxes
             if self.cfg.MODEL.ROI_RELATION_HEAD.FILTER_NON_OVERLAP:
                 ious = boxlist_iou(proposals_per_image, proposals_per_image).view(-1)
-                # ious = ious[keep_idx]
-                # keep_idx = keep_idx[(ious > 0).nonzero(as_tuple=False).view(-1)]
-            # proposal_idx_pairs = proposal_idx_pairs[keep_idx]
-            # proposal_box_pairs = proposal_box_pairs[keep_idx]
-            # proposal_label_pairs = proposal_label_pairs[keep_idx]
+                ious = ious[keep_idx]
+                keep_idx = keep_idx[(ious > 0).nonzero(as_tuple=False).view(-1)]
+            proposal_idx_pairs = proposal_idx_pairs[keep_idx]
+            proposal_box_pairs = proposal_box_pairs[keep_idx]
+            proposal_label_pairs = proposal_label_pairs[keep_idx]
             proposal_pairs_per_image = BoxPairList(proposal_box_pairs, proposals_per_image.size, proposals_per_image.mode)
             proposal_pairs_per_image.add_field("idx_pairs", proposal_idx_pairs)
             proposal_pairs_per_image.add_field("label_pairs", proposal_label_pairs)
@@ -192,13 +192,11 @@ class ROIRelationHead(torch.nn.Module):
             """
             x = None
             obj_class_logits = None
-
             _, obj_labels, im_inds \
                 = _get_tensor_from_boxlist(proposals, 'labels')
             _, proposal_idx_pairs, im_inds_pairs = _get_tensor_from_boxlist(
                 proposal_pairs, 'idx_pairs')
             rel_inds = _get_rel_inds(im_inds, im_inds_pairs, proposal_idx_pairs, len(proposals))
-
             pred_class_logits = self.freq_bias.index_with_labels(
                 torch.stack((
                     obj_labels[rel_inds[:, 0]],
@@ -216,6 +214,7 @@ class ROIRelationHead(torch.nn.Module):
                         obj_class_preds[rel_inds[:, 0]],
                         obj_class_preds[rel_inds[:, 1]],
                     ), 1))
+
         if not self.training:
             # # NOTE: if we have updated object class logits, then we need to update proposals as well!!!
             # if obj_class_logits is not None:

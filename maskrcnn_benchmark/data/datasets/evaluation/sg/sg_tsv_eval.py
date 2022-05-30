@@ -11,12 +11,131 @@ from .evaluator import BasicSceneGraphEvaluator
 from .box import bbox_overlaps
 import pdb
 
+import pickle
+
+
+def do_att_evaluation(dataset, predictions, output_folder, logger, iou_thresh=0.5):
+    prediction_file = os.path.join(output_folder, 'predictions_forcebox.tsv')
+
+    gt_dicts = prepare_vrd_groundtruths(dataset)
+    if hasattr(dataset, 'labelmap'):
+        predict_dicts = prepare_vrd_predictions(prediction_file, dataset.labelmap)
+    else:
+        predict_dicts = prepare_vrd_predictions_no_labelmap(prediction_file, dataset)
+    all_rec = []
+    for classindex in range(dataset.num_att_classes):
+        class_recs = {}
+        image_ids = []
+        confidence = []
+        BB = []
+        npos = 0
+        for image_key, gt_boxlist in gt_dicts.items():
+            sg_prediction = predict_dicts[str(image_key)]
+            pred_bbox = sg_prediction["bboxes"].numpy()
+            gt_bbox = gt_boxlist.bbox.numpy()
+            if len(sg_prediction) == 0:
+                sg_prediction = {'bboxes':torch.as_tensor([]), 'bbox_scores':torch.tensor([]), 'bbox_labels':torch.tensor([]),
+                                 'relation_pairs':torch.tensor([]), 'relation_scores':torch.tensor([]), 'relation_scores_all':torch.tensor([]),
+                                 'relation_labels':torch.tensor([]), 'attr_labels': torch.tensor([]), 'attr_scores': torch.tensor([])}
+
+            gt_label = gt_boxlist.get_field("attributes").numpy()
+            pred_label = sg_prediction["attr_labels"].numpy()
+            pred_score = sg_prediction["attr_scores"].numpy()
+
+            gt_mask_l = np.array([classindex in i for i in gt_label])
+            gt_bbox_l = gt_bbox[gt_mask_l]
+            gt_difficult_l = np.zeros(gt_bbox_l.shape[0], dtype=bool)
+            det = [False] * gt_bbox_l.shape[0]
+            npos = npos + sum(~gt_difficult_l)
+            class_recs[image_key] = {'bbox': gt_bbox_l,
+                                     'difficult': gt_difficult_l,
+                                     'det': det}
+
+            pred_mask_l = np.logical_and(pred_label == classindex, np.not_equal(pred_score, 0.0)).nonzero()
+            pred_bbox_l = pred_bbox[pred_mask_l[0]]
+            pred_score_l = pred_score[pred_mask_l]
+
+            for bbox_tmp, score_tmp in zip(pred_bbox_l, pred_score_l):
+                image_ids.append(image_key)
+                confidence.append(float(score_tmp))
+                BB.append([float(z) for z in bbox_tmp])
+
+        if npos == 0:
+            # No ground truth examples
+            # return 0
+            continue
+        #
+        if len(confidence) == 0:
+            # No detection examples
+            # return 0
+            all_rec.append(0)
+            continue
+
+        confidence = np.array(confidence)
+        BB = np.array(BB)
+
+        # sort by confidence
+
+        sorted_ind = np.argsort(-confidence)# descending
+        sorted_scores = -np.sort(-confidence)
+        BB = BB[sorted_ind, :]
+        image_ids = [image_ids[x] for x in sorted_ind]
+
+        nd = len(image_ids)
+        tp = np.zeros(nd)
+        fp = np.zeros(nd)
+
+        for d in range(nd):
+            R = class_recs[image_ids[d]]
+            bb = BB[d, :].astype(float)
+            ovmax = -np.inf
+            BBGT = R['bbox'].astype(float)
+
+            if BBGT.size > 0:
+                # compute overlaps
+                # intersection
+                ixmin = np.maximum(BBGT[:, 0], bb[0])
+                iymin = np.maximum(BBGT[:, 1], bb[1])
+                ixmax = np.minimum(BBGT[:, 2], bb[2])
+                iymax = np.minimum(BBGT[:, 3], bb[3])
+                iw = np.maximum(ixmax - ixmin + 1., 0.)
+                ih = np.maximum(iymax - iymin + 1., 0.)
+                inters = iw * ih
+
+                # union
+                uni = ((bb[2] - bb[0] + 1.) * (bb[3] - bb[1] + 1.) +
+                       (BBGT[:, 2] - BBGT[:, 0] + 1.) *
+                       (BBGT[:, 3] - BBGT[:, 1] + 1.) - inters)
+
+                overlaps = inters / uni
+                ovmax = np.max(overlaps)
+                jmax = np.argmax(overlaps)
+
+            if ovmax > iou_thresh:
+                if not R['difficult'][jmax]:
+                    if not R['det'][jmax]:
+                        tp[d] = 1.
+                        R['det'][jmax] = 1
+                    else:
+                        fp[d] = 1.
+            else:
+                fp[d] = 1.
+
+        fp = np.cumsum(fp)
+        tp = np.cumsum(tp)
+        rec = tp / float(npos)
+        all_rec.append(rec[-1])
+        # prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
+        # print("prec", prec)
+    all_rec = np.array(all_rec)
+    print("Average recall among all classes is", np.mean(all_rec))
+
+
 def do_sg_evaluation(dataset, predictions, output_folder, logger):
     """
     scene graph generation evaluation
     """
     prediction_file = os.path.join(output_folder, 'predictions.tsv')
-
     gt_dicts = prepare_vrd_groundtruths(dataset)
     
     if hasattr(dataset, 'labelmap'):
@@ -34,7 +153,7 @@ def do_sg_evaluation(dataset, predictions, output_folder, logger):
 
     result_dict[mode + '_recall'] = {20: [], 50: [], 100: []}
     for image_key, gt_boxlist in gt_dicts.items():
-        sg_prediction = predict_dicts[image_key]
+        sg_prediction = predict_dicts[str(image_key)]
         if len(sg_prediction)==0:
             sg_prediction = {'bboxes':torch.as_tensor([]) , 'bbox_scores':torch.tensor([]), 'bbox_labels':torch.tensor([]), 'relation_pairs':torch.tensor([]), 'relation_scores':torch.tensor([]), 'relation_scores_all':torch.tensor([]), 'relation_labels':torch.tensor([])}
 
@@ -103,6 +222,7 @@ def evaluate(gt_classes, gt_boxes, gt_rels,
              rel_inds, rel_scores,
              top_Ns, result_dict,
              mode, iou_thresh=0.5):
+
     gt_classes = gt_classes.cpu()
     gt_boxes = gt_boxes.cpu()
     gt_rels = gt_rels.cpu()
@@ -197,7 +317,7 @@ def evaluate(gt_classes, gt_boxes, gt_rels,
                  predicate_scores, class_scores, is_pred=False)
     sorted_inds = np.argsort(relation_scores)[::-1]
     sorted_inds_obj = np.argsort(class_scores)[::-1]
-    # compue recall
+    # compute recall
 
     for k in result_dict[mode + '_recall']:
         this_k = min(k, num_relations)
@@ -414,8 +534,14 @@ def prepare_vrd_predictions_no_labelmap(pred_tsv_file, dataset):
             relation_scores.append(triplet['conf'])
             relation_scores_all.append(np.frombuffer(base64.b64decode(triplet['scores_all']), np.float32))
             relation_labels.append(dataset.relation_to_ind[triplet['class']])
+        for attribute in predictions['attributes']:
+            attr_labels = attribute["attr_labels"]
+            attr_scores = attribute["attr_scores"]
 
-        predictions_dict[img_key] = {'bboxes':torch.as_tensor(bboxes).reshape(-1, 4) , 'bbox_scores':torch.tensor(bbox_scores), 'bbox_labels':torch.tensor(bbox_labels), 'relation_pairs':torch.tensor(idx_pairs), 'relation_scores':torch.tensor(relation_scores), 'relation_scores_all':torch.tensor(relation_scores_all), 'relation_labels':torch.tensor(relation_labels)}
+        predictions_dict[img_key] = {'bboxes':torch.as_tensor(bboxes).reshape(-1, 4) , 'bbox_scores':torch.tensor(bbox_scores),
+                                     'bbox_labels':torch.tensor(bbox_labels), 'relation_pairs':torch.tensor(idx_pairs),
+                                     'relation_scores':torch.tensor(relation_scores), 'relation_scores_all':torch.tensor(relation_scores_all),
+                                     'relation_labels':torch.tensor(relation_labels), 'attr_labels': torch.tensor(attr_labels), 'attr_scores': torch.tensor(attr_scores)}
     return predictions_dict
 
 

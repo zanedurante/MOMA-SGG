@@ -9,6 +9,7 @@ def moma_evaluation(
     iou_types,
     expected_results,
     expected_results_sigma_tol,
+    eval_attributes,
     **args, # Do not use additional args (e.g. eval_attributes)
 ):
     
@@ -20,4 +21,5 @@ def moma_evaluation(
         iou_types=iou_types,
         expected_results=expected_results,
         expected_results_sigma_tol=expected_results_sigma_tol,
+        eval_attributes=eval_attributes
     )

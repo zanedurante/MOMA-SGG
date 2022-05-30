@@ -26,6 +26,7 @@ def compute_on_dataset(model, data_loader, device, bbox_aug, timer=None):
     model.eval()
     results_dict = {}
     cpu_device = torch.device("cpu")
+    counter = 0
     for _, batch in enumerate(tqdm(data_loader)):
         images, targets, image_ids, scales = batch[0], batch[1], batch[2], batch[3:]
         with torch.no_grad():
@@ -80,7 +81,7 @@ def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu, gather_on_cp
 
 def convert_predictions_to_tsv(predictions, dataset, output_folder,
                                data_subset, labelmap_file=None,
-                               relation_on=False,
+                               relation_on=False, attribute_on=True,
                                output_tsv_name='predictions.tsv'):
     # convert the prediction results to tsv format and save
     # for easier visualization and post-processing.
@@ -180,17 +181,6 @@ def convert_predictions_to_tsv(predictions, dataset, output_folder,
                     if name == 'boxes_all':
                         cur_d['boxes_all'] = base64.b64encode(boxes_all[i]) \
                             .decode('utf-8')
-                    if name == 'attr_labels':
-                        cur_d['attributes'] = []
-                        for attr in attr_labels[i]:
-                            cur_d['attributes'].append(attr_labelmap[attr])
-                    if name == 'attr_scores':
-                        cur_d['attr_scores'] = []
-                        for attr_score in attr_scores[i]:
-                            cur_d['attr_scores'].append(attr_score)
-                    if name == 'attr_scores_all':
-                        cur_d['attr_scores_all'] = base64.b64encode(attr_scores_all[i]) \
-                            .decode('utf-8')
                 objects.append(cur_d)
             
             triplets = None
@@ -210,8 +200,18 @@ def convert_predictions_to_tsv(predictions, dataset, output_folder,
                         if name == 'relation_feature':
                             cur_d['relation_feature'] = base64.b64encode(relation_features[i]).decode('utf-8')
                     triplets.append(cur_d)
+
+            attributes = []
+            if attribute_on:
+                cur_d = {}
+                for name in data_subset:
+                    if name == 'attr_labels':
+                        cur_d['attr_labels'] = attr_labels
+                    if name == 'attr_scores':
+                        cur_d['attr_scores'] = attr_scores
+                attributes.append(cur_d)
             
-            yield json.dumps({'objects': objects, 'relations':triplets})
+            yield json.dumps({'objects': objects, 'relations': triplets, 'attributes': attributes})
     rows = gen_rows()
     tsv_writer(rows, os.path.join(output_folder, output_tsv_name))
 
@@ -255,8 +255,8 @@ def inference(
             # change to force_boxes=True mode
             force_boxes_model = model.force_boxes
             force_boxes_box = model.roi_heads.box.post_processor.force_boxes
-            model.force_boxes = True
-            model.roi_heads.box.post_processor.force_boxes = True
+            # model.force_boxes = True
+            # model.roi_heads.box.post_processor.force_boxes = True
             predictions = compute_on_dataset(model, data_loader, device, bbox_aug,
                                              inference_timer)
             # return to the original state

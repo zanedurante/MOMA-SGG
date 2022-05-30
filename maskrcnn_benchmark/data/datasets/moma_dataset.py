@@ -13,7 +13,7 @@ import os.path as op
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.data.datasets.vg_tsv import _box_filter
-from momaapi import MOMA
+from .momaapi import MOMA
 import os
 BOX_SCALE = 1024  # Scale at which we have the boxes
 
@@ -23,7 +23,7 @@ class MOMADataset(torch.utils.data.Dataset):
     def __init__(self, split, moma_path='default val set in paths_catalog.py', num_instances_threshold=50, transforms=None,
                 filter_empty_rels=True, num_im=-1, num_val_im=5000,
                 filter_duplicate_rels=True, filter_non_overlap=True, flip_aug=False, custom_eval=False, custom_path='', 
-                debug=False, no_human_classes=True, relation_on=True, freq_prior_file='/home/ssd/data/moma/moma.freq_prior.npy'):
+                debug=True, no_human_classes=True, relation_on=True, attribute_on=True, freq_prior_file='/home/ssd/data/moma/moma.freq_prior.npy'):
         """
         Torch dataset for MOMA
         Parameters:
@@ -92,20 +92,31 @@ class MOMADataset(torch.utils.data.Dataset):
         assert not self.custom_eval # MOMA Does not support custom eval currently
 
         self.relation_on = relation_on
-        self.hoi_id_map = {}
-        self.hoi_id_map['__no_relation__'] = 0
+        self.attribute_on = attribute_on
+        self.rel_id_map = {}
+        self.rel_id_map['__no_relation__'] = 0
+        self.att_id_map = {}
+        self.att_id_map['__no_attribute__'] = 0
+
         if self.relation_on:
-            for ia in self.moma.taxonomy['ia']:
-                self.hoi_id_map[ia[0]] = len(self.hoi_id_map)
             for ta in self.moma.taxonomy['ta']:
-                self.hoi_id_map[ta[0]] = len(self.hoi_id_map)
-            for att in self.moma.taxonomy['att']:
-                self.hoi_id_map[att[0]] = len(self.hoi_id_map)
+                self.rel_id_map[ta[0]] = len(self.rel_id_map)
             for rel in self.moma.taxonomy['rel']:
-                self.hoi_id_map[rel[0]] = len(self.hoi_id_map)
-            self.num_hoi_classes = len(self.hoi_id_map)
-            self.ind_to_relation = {v: k for k, v in self.hoi_id_map.items()}
-        print("Relation prediction on", len(self.hoi_id_map), "classes")
+                self.rel_id_map[rel[0]] = len(self.rel_id_map)
+            self.num_rel_classes = len(self.rel_id_map)
+            self.ind_to_relation = {v: k for k, v in self.rel_id_map.items()}
+        if self.attribute_on:
+            for ia in self.moma.taxonomy['ia']:
+                self.att_id_map[ia[0]] = len(self.att_id_map)
+            for att in self.moma.taxonomy['att']:
+                self.att_id_map[att[0]] = len(self.att_id_map)
+            self.num_att_classes = len(self.att_id_map)
+            self.ind_to_attribute = {v: k for k, v in self.att_id_map.items()}
+
+        print("Relation prediction on", len(self.rel_id_map), "classes")
+        # print("Relation list:", self.rel_id_map.keys())
+        print("Attribute prediction on", len(self.att_id_map), "classes")
+        # print("Attribute list:", self.att_id_map.keys())
 
         # TODO: Implement everything (include relationships) via self.create_dataset()
         self.dataset_dict = self.create_dataset()
@@ -124,7 +135,7 @@ class MOMADataset(torch.utils.data.Dataset):
         fg_matrix = np.zeros((
             len(self.classes),
             len(self.classes),
-            self.num_hoi_classes
+            self.num_rel_classes
         ), dtype=np.int64)
 
         bg_matrix = np.zeros((
@@ -168,6 +179,7 @@ class MOMADataset(torch.utils.data.Dataset):
         boxlist.add_field("labels", labels)
         boxlist.add_field("relation_labels", self.dataset_dict[index]["pred_triplets"])
         boxlist.add_field("pred_labels", self.dataset_dict[index]["pred_matrix"])
+        boxlist.add_field("attributes", self.dataset_dict[index]["attributes"])
 
         return boxlist
 
@@ -212,6 +224,9 @@ class MOMADataset(torch.utils.data.Dataset):
             boxlist.add_field("pred_labels",  self.dataset_dict[index]["pred_matrix"])
             self.contrastive_loss_target_transform(boxlist)
 
+        if self.attribute_on:
+            boxlist.add_field("attributes", self.dataset_dict[index]["attributes"])
+
         return img, boxlist, index
 
 
@@ -236,7 +251,6 @@ class MOMADataset(torch.utils.data.Dataset):
         dataset_dicts = []
 
         # hoi --> act --> metadata
-
         for ann_hoi, image_path in zip(anns_hoi, image_paths):
 
             record = {}
@@ -279,6 +293,7 @@ class MOMADataset(torch.utils.data.Dataset):
                     obj_bbs.append([bbox.x, bbox.y, bbox.x + bbox.width, bbox.y + bbox.height])
                     obj_id_map[id] = len(obj_id_map)
 
+            # print(obj_labels)
             record["labels"] = obj_labels
             record["bboxes"] = obj_bbs
 
@@ -287,17 +302,28 @@ class MOMADataset(torch.utils.data.Dataset):
 
             # relation triplets
             relation_triplets = []
-            relation_set = set()
             # relation matrices
             relations = torch.zeros([len(obj_labels), len(obj_labels)], dtype=torch.int64)
-
+            attributes = [[] for _ in range(len(obj_labels))] #[[], [], [], []]
             for ia in ann_hoi.ias:
                 src = ia.id_src
                 if src in obj_id_map:
                     src_id = obj_id_map[src]
-                    predicate = self.hoi_id_map[ia.cname]
-                    relations[src_id, src_id] = predicate
-                    relation_triplets.append([src_id, src_id, predicate])
+                    predicate = self.att_id_map[ia.cname]
+                    attributes[src_id].append(predicate)
+
+            for att in ann_hoi.atts:
+                src = att.id_src
+                if src in obj_id_map:
+                    src_id = obj_id_map[src]
+                    predicate = self.att_id_map[att.cname]
+                    attributes[src_id].append(predicate)
+
+            for att in attributes:
+                pad = 5 - len(att)
+                for _ in range(pad):
+                    att.append(0)
+            record["attributes"] = torch.tensor(attributes)
 
             for ta in ann_hoi.tas:
                 src = ta.id_src
@@ -305,17 +331,9 @@ class MOMADataset(torch.utils.data.Dataset):
                 if src in obj_id_map and trg in obj_id_map:
                     src_id = obj_id_map[src]
                     trg_id = obj_id_map[trg]
-                    predicate = self.hoi_id_map[ta.cname]
+                    predicate = self.rel_id_map[ta.cname]
                     relations[src_id, trg_id] = predicate
                     relation_triplets.append([src_id, trg_id, predicate])
-
-            for att in ann_hoi.atts:
-                src = att.id_src
-                if src in obj_id_map:
-                    src_id = obj_id_map[src]
-                    predicate = self.hoi_id_map[att.cname]
-                    relations[src_id, src_id] = predicate
-                    relation_triplets.append([src_id, src_id, predicate])
 
             for rel in ann_hoi.rels:
                 src = rel.id_src
@@ -323,13 +341,14 @@ class MOMADataset(torch.utils.data.Dataset):
                 if src in obj_id_map and trg in obj_id_map:
                     src_id = obj_id_map[src]
                     trg_id = obj_id_map[trg]
-                    predicate = self.hoi_id_map[rel.cname]
+                    predicate = self.rel_id_map[rel.cname]
                     relations[src_id, trg_id] = predicate
                     relation_triplets.append([src_id, trg_id, predicate])
             
             if len(relation_triplets) == 0:
                 continue # scene_graph_benchmark can only train on relationships that exist (have bounding boxes)
-            
+
+            # print(relation_triplets)
             relation_triplets = torch.tensor(relation_triplets)
             record["pred_triplets"] = relation_triplets
             record["pred_matrix"] = relations
@@ -337,7 +356,8 @@ class MOMADataset(torch.utils.data.Dataset):
             dataset_dicts.append(record)
         
         # Create relation_to_ind --> not sure if this is right!
-        self.relation_to_ind = self.hoi_id_map # For compatibility with repo
+        self.relation_to_ind = self.rel_id_map # For compatibility with repo
+        self.attribute_to_ind = self.att_id_map
         
         return dataset_dicts
 
@@ -369,7 +389,7 @@ class MOMADataset(torch.utils.data.Dataset):
 
         # misc
         num_obj_classes = len(self.classes)
-        num_prd_classes = len(self.hoi_id_map) - 1
+        num_prd_classes = len(self.rel_id_map) - 1
 
         sbj_gt_overlaps = np.zeros(
             (len(relation_triplets), num_obj_classes), dtype=np.float32)
@@ -404,3 +424,6 @@ class MOMADataset(torch.utils.data.Dataset):
     #    width = self.dataset_dict[index]["width"]
     #    hw_dict = {"height": int(height), "width": int(width)}
     #    return hw_dict
+
+
+

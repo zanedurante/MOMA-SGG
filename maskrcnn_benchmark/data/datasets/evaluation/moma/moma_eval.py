@@ -12,12 +12,13 @@ from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
-from maskrcnn_benchmark.data.datasets.evaluation.sg.sg_tsv_eval import do_sg_evaluation
+from maskrcnn_benchmark.data.datasets.evaluation.sg.sg_tsv_eval import do_sg_evaluation, do_att_evaluation
 
 from scene_graph_benchmark.scene_parser import SceneParserOutputs
 
 #import wandb
 import pdb
+from collections import defaultdict
 
 def do_moma_evaluation(
     dataset,
@@ -27,17 +28,30 @@ def do_moma_evaluation(
     iou_types,
     expected_results,
     expected_results_sigma_tol,
+    eval_attributes,
 ):
     if isinstance(predictions[0], SceneParserOutputs):
-        return do_moma_graph_evaluation(
-            dataset,
-            predictions,
-            box_only,
-            output_folder,
-            iou_types,
-            expected_results,
-            expected_results_sigma_tol,
-        )
+        if eval_attributes:
+            return do_moma_attribute_evaluation(
+                dataset,
+                predictions,
+                box_only,
+                output_folder,
+                iou_types,
+                expected_results,
+                expected_results_sigma_tol,
+            )
+        else:
+            return do_moma_graph_evaluation(
+                dataset,
+                predictions,
+                box_only,
+                output_folder,
+                iou_types,
+                expected_results,
+                expected_results_sigma_tol,
+            )
+
     else:
         return do_moma_object_evaluation(
             dataset,
@@ -49,6 +63,21 @@ def do_moma_evaluation(
             expected_results_sigma_tol,
         )
 
+
+def do_moma_attribute_evaluation(
+    dataset,
+    predictions,
+    box_only,
+    output_folder,
+    iou_types,
+    expected_results,
+    expected_results_sigma_tol):
+
+    logger = logging.getLogger("maskrcnn_benchmark.trainer")
+    return do_att_evaluation(dataset, predictions, output_folder, logger)
+
+
+
 def do_moma_graph_evaluation(
     dataset,
     predictions,
@@ -57,6 +86,7 @@ def do_moma_graph_evaluation(
     iou_types,
     expected_results,
     expected_results_sigma_tol,
+
 ):
   #  obj_preds = {k: v.predictions for k,v in predictions.items()}
   #  do_moma_object_evaluation(

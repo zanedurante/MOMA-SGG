@@ -182,7 +182,7 @@ def evaluate_recall(gt_rels, gt_boxes, gt_classes,
     assert pred_rels[:, :2].max() < pred_classes.shape[0]
 
     # Exclude self rels
-    # assert np.all(pred_rels[:,0] != pred_rels[:,1])
+    assert np.all(pred_rels[:,0] != pred_rels[:,1])
     assert np.all(pred_rels[:, 2] > 0)
 
     pred_triplets, pred_triplet_boxes, relation_scores = \
@@ -233,7 +233,6 @@ def _triplet(predicates, relations, classes, boxes,
              Triplet scores: num_relation array of the scores overall for the triplets
     """
     assert (predicates.shape[0] == relations.shape[0])
-
     sub_ob_classes = classes[relations[:, :2]]
     triplets = np.column_stack((sub_ob_classes[:, 0], predicates, sub_ob_classes[:, 1]))
     triplet_boxes = np.column_stack((boxes[relations[:, 0]], boxes[relations[:, 1]]))
@@ -265,6 +264,7 @@ def _compute_pred_matches(gt_triplets, pred_triplets,
     # Instead of summing, we want the equality, so we reduce in that way
     # The rows correspond to GT triplets, columns to pred triplets
     keeps = intersect_2d(gt_triplets, pred_triplets)
+
     gt_has_match = keeps.any(1)
     pred_to_gt = [[] for x in range(pred_boxes.shape[0])]
     for gt_ind, gt_box, keep_inds in zip(np.where(gt_has_match)[0],
