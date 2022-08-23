@@ -60,7 +60,7 @@ class RelDN(nn.Module):
         for proposal, proposal_pair in zip(proposals, proposal_pairs):
             rel_ind_i = proposal_pair.get_field("idx_pairs").detach().clone()
             rel_ind_i += offset
-            #offset += len(proposal) # Not sure why this is here???
+            offset += len(proposal) # Not sure why this is here???
             rel_inds.append(rel_ind_i)
 
         rel_inds = torch.cat(rel_inds, 0)
@@ -98,7 +98,7 @@ class RelDN(nn.Module):
                 enumerate(zip(proposals, proposal_pairs)):
             rel_ind_i = proposal_pairs_per_image.get_field("idx_pairs").detach()
             rel_ind_i += offset
-            #offset += len(proposal_per_image)
+            offset += len(proposal_per_image)
             rel_inds.append(rel_ind_i)
 
             if self.cfg.MODEL.ROI_RELATION_HEAD.SEPERATE_SO_FEATURE_EXTRACTOR:
@@ -118,6 +118,7 @@ class RelDN(nn.Module):
             obj_vert_labels = obj_labels[rel_ind_i[:, 1]]
 
             # class_logits_per_image = self.pred_dist[(subj_vert_labels-1) * self.num_objs + (obj_vert_labels-1)]
+            pdb.set_trace()
             class_logits_per_image = self.freq_bias.index_with_labels(torch.stack((subj_vert_labels, obj_vert_labels,), 1)) 
             rel_sem_class_logits.append(class_logits_per_image)
         #pdb.set_trace()
@@ -138,6 +139,7 @@ class RelDN(nn.Module):
         rel_sem_class_logits = torch.cat(rel_sem_class_logits, 0)
         
         '''sum up all scores'''
+        pdb.set_trace()
         rel_class_logits = rel_vis_class_logits + rel_sem_class_logits + rel_spt_class_logits
 
         if obj_class_logits is None:

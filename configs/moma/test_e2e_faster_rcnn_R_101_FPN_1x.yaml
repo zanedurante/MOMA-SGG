@@ -21,6 +21,7 @@ MODEL:
     POOLER_SAMPLING_RATIO: 2
     FEATURE_EXTRACTOR: "FPN2MLPFeatureExtractor"
     PREDICTOR: "FPNPredictor"
+    NUM_CLASSES: 60
 DATASETS:
   TEST: ('moma_test',) #("moma_val",)  # ("moma_train",)
 DATALOADER:
@@ -32,4 +33,8 @@ SOLVER:
   MAX_ITER: 90000
   TEST_PERIOD: 10
   CHECKPOINT_PERIOD: 10000
+<<<<<<< HEAD
 OUTPUT_DIR: "output/test_6_8_2022_obj_detection/"
+=======
+OUTPUT_DIR: "output/60_class"
+>>>>>>> 9b74927ee1cc2e585a8ec7c15827c822f141e0d3

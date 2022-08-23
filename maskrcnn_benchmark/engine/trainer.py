@@ -20,6 +20,9 @@ import wandb
 
 USE_WANDB = True
 
+import wandb
+
+
 def reduce_loss_dict(loss_dict):
     """
     Reduce the loss dictionary from all processes so that process with rank
@@ -59,6 +62,7 @@ def do_train(
     arguments,
     meters=None,
 ):
+
     if USE_WANDB:
         project = cfg.MODEL.ROI_RELATION_HEAD.MODE
         wandb.init(project=project, entity="durante")
@@ -67,7 +71,6 @@ def do_train(
           "learning_rate": cfg.SOLVER.BASE_LR,
         }
     
-
     if meters is None:
         meters = MetricLogger(delimiter="  ")
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
@@ -122,10 +125,14 @@ def do_train(
         # reduce losses over all GPUs for logging purposes
         loss_dict_reduced = reduce_loss_dict(loss_dict)
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+<<<<<<< HEAD
         
         if USE_WANDB:
             wandb.log({"loss": losses_reduced})
         
+=======
+        wandb.log({"loss":losses_reduced})
+>>>>>>> 9b74927ee1cc2e585a8ec7c15827c822f141e0d3
         meters.update(loss=losses_reduced, **loss_dict_reduced)
 
         optimizer.zero_grad()

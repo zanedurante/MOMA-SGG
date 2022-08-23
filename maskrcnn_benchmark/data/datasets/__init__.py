@@ -11,6 +11,7 @@ from .openimages_vrd_tsv import OpenImagesVRDTSVDataset
 from .vg_tsv import VGTSVDataset
 from .od_tsv import ODTSVDataset
 from .moma_dataset import MOMADataset
+import momaapi
 
 __all__ = [
     "COCODataset",

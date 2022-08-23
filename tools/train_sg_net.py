@@ -190,7 +190,7 @@ def main():
 
     cfg.set_new_allowed(True)
     cfg.merge_from_other_cfg(sg_cfg)
-    cfg.set_new_allowed(False)
+    #cfg.set_new_allowed(False) # Allow new args in config file
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()

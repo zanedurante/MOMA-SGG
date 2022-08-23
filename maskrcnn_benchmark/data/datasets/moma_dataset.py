@@ -14,6 +14,7 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.data.datasets.vg_tsv import _box_filter
 from momaapi import MOMA
+
 import os
 BOX_SCALE = 1024  # Scale at which we have the boxes
 import pdb
@@ -40,7 +41,6 @@ class MOMADataset(torch.utils.data.Dataset):
             num_val_im: Number of images in the validation set (must be less than num_im
                unless num_im is -1.)
         """
-        
         # for debug
         # num_im = 10000
         # num_val_im = 4
@@ -51,6 +51,10 @@ class MOMADataset(torch.utils.data.Dataset):
         #    self.actor_classes = self.moma.get_cnames(concept='actor')
         #    self.object_classes = self.moma.get_cnames(concept='object')
         #else:
+        
+        if debug:
+            print("=== DEBUG IS ON ===")
+        
         self.debug = debug
         self.moma = MOMA(moma_path) # Save moma API object
         obj_cids = self.moma.get_cids(kind='object', threshold=num_instances_threshold, split='either')
@@ -135,7 +139,7 @@ class MOMADataset(torch.utils.data.Dataset):
             print("+ + + + Using file:", self.dataset_dict[self.debug_idx]["file_name"])
         print("DATASET HAS:", self.__len__(), "examples")
 
-        if self.relation_on and self.split == 'train' and not op.exists(freq_prior_file):
+        if self.relation_on and self.split == 'train':# and not op.exists(freq_prior_file):
             print("Computing frequency prior matrix...")
             fg_matrix, bg_matrix = self._get_freq_prior()
             prob_matrix = fg_matrix.astype(np.float32)
