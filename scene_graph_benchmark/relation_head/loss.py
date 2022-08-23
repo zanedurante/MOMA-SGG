@@ -246,15 +246,15 @@ class FastRCNNLossComputation(object):
         idx_obj = torch.arange(box_obj.shape[0]).view(1, -1, 1).repeat(box_subj.shape[0], 1, 1).to(proposals[0].bbox.device)
         proposal_idx_pairs_per_image = torch.cat((idx_subj.view(-1, 1), idx_obj.view(-1, 1)), 1)
 
-        # keep_idx = (proposal_idx_pairs_per_image[:, 0] != proposal_idx_pairs_per_image[:, 1]).nonzero(as_tuple=False).view(-1)
+        keep_idx = (proposal_idx_pairs_per_image[:, 0] != proposal_idx_pairs_per_image[:, 1]).nonzero(as_tuple=False).view(-1)
 
         # if we filter non overlap bounding boxes
         if cfg.MODEL.ROI_RELATION_HEAD.FILTER_NON_OVERLAP:
             ious = boxlist_iou(proposals[0], proposals[0]).view(-1)
-            # ious = ious[keep_idx]
-            # keep_idx = keep_idx[(ious > 0).nonzero(as_tuple=False).view(-1)]
+            ious = ious[keep_idx]
+            keep_idx = keep_idx[(ious > 0).nonzero(as_tuple=False).view(-1)]
 
-        # proposal_box_pairs_per_image = proposal_box_pairs_per_image[keep_idx]
+        proposal_box_pairs_per_image = proposal_box_pairs_per_image[keep_idx]
         proposal_box_pairs.append(proposal_box_pairs_per_image)
 
         # Add binary relationships
