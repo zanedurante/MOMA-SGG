@@ -22,12 +22,16 @@ from ..utils.timer import Timer, get_time_str
 from .bbox_aug import im_detect_bbox_aug
 import pdb
 
+DEBUG=False
+
 def compute_on_dataset(model, data_loader, device, bbox_aug, timer=None):
     model.eval()
     results_dict = {}
     cpu_device = torch.device("cpu")
     counter = 0
-    for _, batch in enumerate(tqdm(data_loader)):
+    for idx, batch in enumerate(tqdm(data_loader)):
+        if DEBUG and idx > 200:
+            break
         images, targets, image_ids, scales = batch[0], batch[1], batch[2], batch[3:]
         with torch.no_grad():
             if timer:
@@ -36,6 +40,7 @@ def compute_on_dataset(model, data_loader, device, bbox_aug, timer=None):
                 output = im_detect_bbox_aug(model, images, device)
             else:
                 try:
+                    #pdb.set_trace()
                     output = model(images.to(device), targets)
                 except RuntimeError as e:
                     image_ids_str = [str(img_id) for img_id in image_ids]
@@ -112,6 +117,11 @@ def convert_predictions_to_tsv(predictions, dataset, output_folder,
         else:
             raise ValueError("relation labelmap is required, but was not provided")
     
+    def get_idxs():
+        for idx, prediction in sorted(predictions.items()):
+            image_key = dataset.get_img_key(idx)
+            yield image_key
+    
     def gen_rows():
         for idx, prediction in sorted(predictions.items()):
             image_key = dataset.get_img_key(idx)
@@ -150,7 +160,7 @@ def convert_predictions_to_tsv(predictions, dataset, output_folder,
             if "attr_scores_all" in data_subset:
                 attr_scores_all = prediction.get_field("attr_scores_all").numpy()
             if 'relations' in data_subset:
-                relations = relations.tolist() # Why + 1? (because 0 = no relation)
+                relations = relations.tolist() # Why + 1? (because 0 = no relation) # Actually: maybe not +1??
                 predicates = [relation_labelmap[rel+1] for rel in predicates.tolist()]
             if 'relation_scores' in data_subset:
                 relation_scores = relation_scores.tolist()
@@ -213,7 +223,8 @@ def convert_predictions_to_tsv(predictions, dataset, output_folder,
             
             yield json.dumps({'objects': objects, 'relations': triplets, 'attributes': attributes})
     rows = gen_rows()
-    tsv_writer(rows, os.path.join(output_folder, output_tsv_name))
+    idxs = get_idxs()
+    tsv_writer(rows, os.path.join(output_folder, output_tsv_name), idxs)
 
 def inference(
         model,

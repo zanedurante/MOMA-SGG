@@ -30,8 +30,32 @@ def load_linelist_file(linelist_file):
                 line_list.append(int(i.strip()))
         return line_list
 
-
-def tsv_writer(values, tsv_file, sep='\t'):
+def tsv_writer(values, tsv_file, img_idxs, sep='\t'):
+    mkdir(op.dirname(tsv_file))
+    lineidx_file = op.splitext(tsv_file)[0] + '.lineidx'
+    idx = 0
+    tsv_file_tmp = tsv_file + '.tmp'
+    lineidx_file_tmp = lineidx_file + '.tmp'
+    with open(tsv_file_tmp, 'w') as fp, open(lineidx_file_tmp, 'w') as fpidx:
+        assert values is not None
+        for idx, value in zip(img_idxs, values):
+            assert value is not None
+            # this step makes sure python2 and python3 encoded img string are the same.
+            # for python2 encoded image string, it is a str class starts with "/".
+            # for python3 encoded image string, it is a bytes class starts with "b'/".
+            # v.decode('utf-8') converts bytes to str so the content is the same.
+            # v.decode('utf-8') should only be applied to bytes class type. 
+            #value = [v if type(v)!=bytes else v.decode('utf-8') for v in value]
+            #v = '{0}\n'.format(sep.join(map(str, value)))
+            v = '{0}\t{1}\n'.format(idx, value)
+            fp.write(v)
+            fpidx.write(str(idx) + '\n')
+            idx = idx + len(v)
+    os.rename(tsv_file_tmp, tsv_file)
+    os.rename(lineidx_file_tmp, lineidx_file)
+    
+"""
+def tsv_writer(values, tsv_file, idxs, sep='\t'):
     mkdir(op.dirname(tsv_file))
     lineidx_file = op.splitext(tsv_file)[0] + '.lineidx'
     idx = 0
@@ -54,7 +78,7 @@ def tsv_writer(values, tsv_file, sep='\t'):
             idx = idx + len(v)
     os.rename(tsv_file_tmp, tsv_file)
     os.rename(lineidx_file_tmp, lineidx_file)
-
+"""
 
 def tsv_reader(tsv_file, sep='\t'):
     with open(tsv_file, 'r') as fp:

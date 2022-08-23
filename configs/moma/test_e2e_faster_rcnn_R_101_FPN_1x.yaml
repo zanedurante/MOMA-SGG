@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-101"
+  WEIGHT: "/home/ssd/data/models/40k_67_model_final.pth"
   BACKBONE:
     CONV_BODY: "R-101-FPN"
   RESNETS:
@@ -16,12 +16,13 @@ MODEL:
     USE_FPN: True
   ROI_BOX_HEAD:
     POOLER_RESOLUTION: 7
+    NUM_CLASSES: 67
     POOLER_SCALES: (0.25, 0.125, 0.0625, 0.03125)
     POOLER_SAMPLING_RATIO: 2
     FEATURE_EXTRACTOR: "FPN2MLPFeatureExtractor"
     PREDICTOR: "FPNPredictor"
 DATASETS:
-  TEST: ("moma_val",)  # ("moma_test",)
+  TEST: ('moma_test',) #("moma_val",)  # ("moma_train",)
 DATALOADER:
   SIZE_DIVISIBILITY: 32
 SOLVER:
@@ -31,4 +32,4 @@ SOLVER:
   MAX_ITER: 90000
   TEST_PERIOD: 10
   CHECKPOINT_PERIOD: 10000
-OUTPUT_DIR: "output/obj_detection"
+OUTPUT_DIR: "output/test_6_8_2022_obj_detection/"

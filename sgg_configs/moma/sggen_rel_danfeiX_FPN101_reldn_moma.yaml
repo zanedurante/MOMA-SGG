@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "SceneParser"
-  WEIGHT: "/home/ssd/data/models/test_model_weights_only.pth"
+  WEIGHT: "/home/ssd/data/models/40k_67_model_final.pth"
   USE_FREQ_PRIOR: False
   FREQ_PRIOR: "moma.freq_prior.npy"
   RESNETS:
@@ -8,7 +8,7 @@ MODEL:
     BACKBONE_OUT_CHANNELS: 256
   BACKBONE:
     CONV_BODY: "R-101-FPN"
-  ATTRIBUTE_ON: True
+  ATTRIBUTE_ON: False
   RELATION_ON: True
   RPN:
     USE_FPN: True
@@ -22,11 +22,11 @@ MODEL:
     POSITIVE_FRACTION: 0.5
     USE_FPN: True
 #    SCORE_THRESH: 0.05 # 0.0001
-    SCORE_THRESH: 0.005 # 0.0005
+    SCORE_THRESH: 0.0001 # 0.0005
     DETECTIONS_PER_IMG: 100 # 600
     MIN_DETECTIONS_PER_IMG: 1
   ROI_BOX_HEAD:
-    NUM_CLASSES: 60 
+    NUM_CLASSES: 67
     POOLER_RESOLUTION: 7
     POOLER_SCALES: (0.25, 0.125, 0.0625, 0.03125)
     POOLER_SAMPLING_RATIO: 2
@@ -70,28 +70,28 @@ MODEL:
 #  PIXEL_MEAN: [103.530, 116.280, 123.675]
 DATASETS:
   TRAIN: ("moma_train",)
-  TEST: ("moma_train",) # Running into error when debugging
+  TEST: ("moma_val",) # Running into error when debugging
 DATALOADER:
   SIZE_DIVISIBILITY: 32
   NUM_WORKERS: 4
 SOLVER:
-#  BASE_LR: 0.015
-  BASE_LR: 0.0005
+  BASE_LR: 0.015
+#  BASE_LR: 0.0005
   WEIGHT_DECAY: 0.0001
   MAX_ITER: 40000
   STEPS: (20000,30000)
-  IMS_PER_BATCH: 1
-  TEST_PERIOD: 100
-  CHECKPOINT_PERIOD: 5000
+  IMS_PER_BATCH: 16
+  TEST_PERIOD: 100000 # No testing
+  CHECKPOINT_PERIOD: 1000 # Every 1k iterations save model
 TEST:
-  IMS_PER_BATCH: 1
+  IMS_PER_BATCH: 8
   SAVE_PREDICTIONS: False
   SAVE_RESULTS_TO_TSV: True
-  TSV_SAVE_SUBSET: ['rect', 'class', 'conf', 'relations', 'relation_scores', 'relation_scores_all', 'attr_labels', 'attr_scores']
+  TSV_SAVE_SUBSET: ['rect', 'class', 'conf', 'relations', 'relation_scores', 'relation_scores_all',]
   GATHER_ON_CPU: True # When True, gets RuntimeError: Tensors must be CUDA and dense
   SKIP_PERFORMANCE_EVAL: False
   OUTPUT_RELATION_FEATURE: False
   OUTPUT_FEATURE: True # need this to output scores_all and box_all
-OUTPUT_DIR: "./output/sgg_debug"
+OUTPUT_DIR: "./output/sggen_6_8_2022"
 DATA_DIR: "./datasets/moma"
 DISTRIBUTED_BACKEND: 'gloo'

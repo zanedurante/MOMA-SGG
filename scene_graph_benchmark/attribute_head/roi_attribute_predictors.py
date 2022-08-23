@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from .. import registry
-
+import pdb
 
 @registry.ROI_ATTRIBUTE_PREDICTOR.register("AttributeRCNNPredictor")
 class AttributeRCNNPredictor(nn.Module):
@@ -27,6 +27,7 @@ class AttributeRCNNPredictor(nn.Module):
         nn.init.constant_(self.attr_score.bias, 0)
 
     def forward(self, x, labels):
+        pdb.set_trace()
         x = self.avgpool(x)
         pool5_flat = x.view(x.size(0), -1)
 

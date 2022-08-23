@@ -30,7 +30,9 @@ def do_moma_evaluation(
     expected_results_sigma_tol,
     eval_attributes,
 ):
-    if isinstance(predictions[0], SceneParserOutputs):
+    #pdb.set_trace()
+    first_key = list(predictions.keys())[0]
+    if isinstance(predictions[first_key], SceneParserOutputs):
         if eval_attributes:
             return do_moma_attribute_evaluation(
                 dataset,
@@ -145,7 +147,7 @@ def do_moma_object_evaluation(
 
             anns = []
             if dataset.debug:
-                dataset_dict = dataset.dataset_dict[len(dataset):]
+                dataset_dict = dataset.dataset_dict[dataset.debug_idx:dataset.debug_idx+1]
             else:
                 assert len(dataset.dataset_dict) == len(predictions)
                 dataset_dict = dataset.dataset_dict
@@ -162,9 +164,12 @@ def do_moma_object_evaluation(
                         'iscrowd': 0,
                     })
             fauxcoco = COCO()
+            imgs_ids = range(len(dataset_dict))
+            if dataset.debug:
+                imgs_ids = [dataset.debug_idx]
             fauxcoco.dataset = {
                     'info': {'description': 'use coco script for moma detection evaluation'},
-                    'images': [{'id': i} for i in range(len(dataset_dict))],
+                    'images': [{'id': i} for i in imgs_ids],
                     'categories': [
                         {'supercategory': 'person', 'id': i, 'name': name} 
                         for i, name in enumerate(dataset.classes) if name != '__background__'

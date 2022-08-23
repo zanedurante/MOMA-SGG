@@ -186,6 +186,7 @@ class SceneParser(GeneralizedRCNN):
                 like `scores`, `labels` and `mask` (for Mask R-CNN models).
 
         """
+        #pdb.set_trace()
         if self.training and targets is None:
             raise ValueError("In training mode, targets should be passed")
         if self.force_relations and targets is None:
@@ -223,7 +224,7 @@ class SceneParser(GeneralizedRCNN):
             if targets is not None or len(targets) != 0:
                 predictions = self.roi_heads['box'].loss_evaluator.prepare_labels(predictions, targets)
         
-        if (self.force_relations or self.cfg.MODEL.ROI_RELATION_HEAD.MODE=='predcls') and not self.training:
+        if (self.force_relations or self.cfg.MODEL.ROI_RELATION_HEAD.MODE=='predcls') and not self.training: # Removed for debugging
             predictions = targets
             for pred in predictions:
                 pred.add_field('scores', torch.tensor([1.0]*len(pred)).to(self.device))
@@ -316,12 +317,13 @@ class SceneParser(GeneralizedRCNN):
 
         # The predictions_pred contains idx_pairs (M*2) and scores (M*Pred_Cat); see Jianwei's code
         # TODO: add force_relations logic
-        # pdb.set_trace()
+        #pdb.set_trace()
         x_pairs, prediction_pairs, relation_losses = self.relation_head(features, predictions, targets)
         # pdb.set_trace()
         scene_parser_losses.update(relation_losses)
 
         # attribute head
+        #pdb.set_trace()
         if self.cfg.MODEL.ATTRIBUTE_ON:
             x_attr, predictions, attribute_losses = self.attribute_head(features, predictions, targets)
 

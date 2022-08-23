@@ -9,7 +9,7 @@ from .roi_mask_predictors import make_roi_mask_predictor
 from .inference import make_roi_mask_post_processor
 from .loss import make_roi_mask_loss_evaluator
 
-
+import pdb
 def keep_only_positive_boxes(boxes):
     """
     Given a set of BoxList containing the `labels` field,
@@ -26,8 +26,9 @@ def keep_only_positive_boxes(boxes):
     num_boxes = 0
     for boxes_per_image in boxes:
         labels = boxes_per_image.get_field("labels")
-        inds_mask = labels > 0
+        inds_mask = labels > -1 # Changed from 0
         inds = inds_mask.nonzero(as_tuple=False).squeeze(1)
+        pdb.set_trace()
         positive_boxes.append(boxes_per_image[inds])
         positive_inds.append(inds_mask)
     return positive_boxes, positive_inds
@@ -61,6 +62,7 @@ class ROIMaskHead(torch.nn.Module):
 
         if self.training:
             # during training, only focus on positive boxes
+            # EDITED: keep_only_positive_boxes changed to keep all classes. No background class in MOMA!
             all_proposals = proposals
             proposals, positive_inds = keep_only_positive_boxes(proposals)
         if self.training and self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:

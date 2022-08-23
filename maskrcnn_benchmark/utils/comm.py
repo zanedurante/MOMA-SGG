@@ -69,7 +69,10 @@ def gather_on_master(data):
     # obtain Tensor size of each rank
     local_size = torch.LongTensor([tensor.numel()])
     size_list = [torch.LongTensor([0]) for _ in range(world_size)]
-    pdb.set_trace()
+    #pdb.set_trace()
+    print("In all_gather")
+    print(size_list)
+    print(local_size)
     dist.all_gather(size_list, local_size)
     size_list = [int(size.item()) for size in size_list]
     max_size = max(size_list)

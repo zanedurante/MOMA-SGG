@@ -136,7 +136,8 @@ def do_sg_evaluation(dataset, predictions, output_folder, logger):
     scene graph generation evaluation
     """
     prediction_file = os.path.join(output_folder, 'predictions.tsv')
-    gt_dicts = prepare_vrd_groundtruths(dataset)
+    use_preds = True
+    gt_dicts = prepare_vrd_groundtruths(dataset, predictions, use_preds) # Updated function to take predictions to allow for smaller numbers of predictions.
     
     if hasattr(dataset, 'labelmap'):
         predict_dicts = prepare_vrd_predictions(prediction_file, dataset.labelmap)
@@ -196,7 +197,7 @@ def do_sg_evaluation(dataset, predictions, output_folder, logger):
             gt_entry,
             pred_entry,
         )
-
+       # pdb.set_trace()
         evaluate(gt_boxlist.get_field("labels"), gt_boxlist.bbox, gt_boxlist.get_field("pred_labels"),
                     sg_prediction['bboxes'], sg_prediction['bbox_scores'], sg_prediction['bbox_labels'],
                     sg_prediction['relation_pairs'], sg_prediction['relation_scores_all'],
@@ -222,7 +223,7 @@ def evaluate(gt_classes, gt_boxes, gt_rels,
              rel_inds, rel_scores,
              top_Ns, result_dict,
              mode, iou_thresh=0.5):
-
+    #pdb.set_trace()
     gt_classes = gt_classes.cpu()
     gt_boxes = gt_boxes.cpu()
     gt_rels = gt_rels.cpu()
@@ -513,7 +514,8 @@ def prepare_vrd_predictions(pred_tsv_file, labelmap):
     return predictions_dict
 
 
-def prepare_vrd_predictions_no_labelmap(pred_tsv_file, dataset):
+def prepare_vrd_predictions_no_labelmap(pred_tsv_file, dataset, has_attr=False):
+    #pdb.set_trace()
     predictions_dict = defaultdict(dict)
     for row in tsv_reader(pred_tsv_file):
         img_key = row[0]
@@ -534,20 +536,29 @@ def prepare_vrd_predictions_no_labelmap(pred_tsv_file, dataset):
             relation_scores.append(triplet['conf'])
             relation_scores_all.append(np.frombuffer(base64.b64decode(triplet['scores_all']), np.float32))
             relation_labels.append(dataset.relation_to_ind[triplet['class']])
-        for attribute in predictions['attributes']:
-            attr_labels = attribute["attr_labels"]
-            attr_scores = attribute["attr_scores"]
-
-        predictions_dict[img_key] = {'bboxes':torch.as_tensor(bboxes).reshape(-1, 4) , 'bbox_scores':torch.tensor(bbox_scores),
-                                     'bbox_labels':torch.tensor(bbox_labels), 'relation_pairs':torch.tensor(idx_pairs),
-                                     'relation_scores':torch.tensor(relation_scores), 'relation_scores_all':torch.tensor(relation_scores_all),
-                                     'relation_labels':torch.tensor(relation_labels), 'attr_labels': torch.tensor(attr_labels), 'attr_scores': torch.tensor(attr_scores)}
+        if has_attr:
+            for attribute in predictions['attributes']: # Currently, attributes are stored in the object detection boxes in extra_fields['attr_labels']
+                attr_labels = attribute["attr_labels"]
+                attr_scores = attribute["attr_scores"]
+        
+        pred_dict = {'bboxes':torch.as_tensor(bboxes).reshape(-1, 4) , 'bbox_scores':torch.tensor(bbox_scores),
+                     'bbox_labels':torch.tensor(bbox_labels), 'relation_pairs':torch.tensor(idx_pairs),
+                     'relation_scores':torch.tensor(relation_scores), 'relation_scores_all':torch.tensor(relation_scores_all),
+                     'relation_labels':torch.tensor(relation_labels)}
+        if has_attr:
+            pred_dict['attr_labels'] = torch.tensor(attr_labels) 
+            pred_dict['attr_scores'] = torch.tensor(attr_scores)
+        
+        predictions_dict[img_key] = pred_dict
     return predictions_dict
 
 
-def prepare_vrd_groundtruths(dataset):
+def prepare_vrd_groundtruths(dataset, preds, use_preds=False):
     gt_dict = defaultdict(dict)
-    for idx in range(len(dataset)):
+    idx_gen = range(len(dataset))
+    if use_preds:
+        idx_gen = preds.keys()
+    for idx in idx_gen:
         img_key = dataset.get_img_key(idx)
         gt_boxlist = dataset.get_groundtruth(idx)
         gt_dict[img_key] = gt_boxlist

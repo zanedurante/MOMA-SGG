@@ -9,6 +9,8 @@ from .roi_attribute_predictors import make_roi_attribute_predictor
 from .inference import make_roi_attribute_post_processor
 from .loss import make_roi_attribute_loss_evaluator
 
+import pdb
+
 class ROIAttributeHead(torch.nn.Module):
     def __init__(self, cfg, in_channels):
         super(ROIAttributeHead, self).__init__()
@@ -34,7 +36,7 @@ class ROIAttributeHead(torch.nn.Module):
             losses (dict[Tensor]): During training, returns the losses for the
                 head. During testing, returns an empty dict.
         """
-
+        
         if self.training:
             # during training, only focus on positive boxes
             all_proposals = proposals

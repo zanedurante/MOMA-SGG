@@ -74,7 +74,7 @@ class RelDN(nn.Module):
         return rel_inds, subj_pred_map, obj_pred_map
 
     def forward(self, features, proposals, proposal_pairs):
-       # pdb.set_trace()
+        #pdb.set_trace()
         obj_class_logits = None
         rel_inds = []
         
@@ -93,6 +93,7 @@ class RelDN(nn.Module):
         obj_vert = []
         rel_sem_class_logits = []
         offset = 0
+        
         for img_id, (proposal_per_image, proposal_pairs_per_image) in \
                 enumerate(zip(proposals, proposal_pairs)):
             rel_ind_i = proposal_pairs_per_image.get_field("idx_pairs").detach()
@@ -119,7 +120,7 @@ class RelDN(nn.Module):
             # class_logits_per_image = self.pred_dist[(subj_vert_labels-1) * self.num_objs + (obj_vert_labels-1)]
             class_logits_per_image = self.freq_bias.index_with_labels(torch.stack((subj_vert_labels, obj_vert_labels,), 1)) 
             rel_sem_class_logits.append(class_logits_per_image)
-
+        #pdb.set_trace()
         sub_vert = torch.cat(sub_vert, 0)
         obj_vert = torch.cat(obj_vert, 0)
         rel_inds = torch.cat(rel_inds, 0)

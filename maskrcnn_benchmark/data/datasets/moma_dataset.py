@@ -13,17 +13,18 @@ import os.path as op
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.data.datasets.vg_tsv import _box_filter
-from .momaapi import MOMA
+from momaapi import MOMA
 import os
 BOX_SCALE = 1024  # Scale at which we have the boxes
-
+import pdb
+import pickle
 
 class MOMADataset(torch.utils.data.Dataset):
     
     def __init__(self, split, moma_path='default val set in paths_catalog.py', num_instances_threshold=50, transforms=None,
                 filter_empty_rels=True, num_im=-1, num_val_im=5000,
                 filter_duplicate_rels=True, filter_non_overlap=True, flip_aug=False, custom_eval=False, custom_path='', 
-                debug=True, no_human_classes=True, relation_on=True, attribute_on=True, freq_prior_file='/home/ssd/data/moma/moma.freq_prior.npy'):
+                debug=False, no_human_classes=True, relation_on=True, attribute_on=True, freq_prior_file='/home/ssd/data/moma/moma.freq_prior.npy'):
         """
         Torch dataset for MOMA
         Parameters:
@@ -51,9 +52,14 @@ class MOMADataset(torch.utils.data.Dataset):
         #    self.object_classes = self.moma.get_cnames(concept='object')
         #else:
         self.debug = debug
-        self.moma = MOMA(moma_path, load_val=True) # Save moma API object
-        self.actor_classes = self.moma.get_cnames(kind='actor', threshold=num_instances_threshold, split='either') # Only train on actors and objects from val set
-        self.object_classes = self.moma.get_cnames(kind='object', threshold=num_instances_threshold, split='either') # Ensure there are at least 50 examples to include
+        self.moma = MOMA(moma_path) # Save moma API object
+        obj_cids = self.moma.get_cids(kind='object', threshold=num_instances_threshold, split='either')
+        self.object_classes = self.moma.get_cnames(cids_object=obj_cids)
+        act_cids = self.moma.get_cids(kind='actor', threshold=num_instances_threshold, split='either')
+        self.actor_classes = self.moma.get_cnames(cids_object=act_cids)
+        
+        #self.actor_classes = self.moma.get_cnames(kind='actor', threshold=num_instances_threshold, split='either') # Only train on actors and objects from val set
+        #self.object_classes = self.moma.get_cnames(kind='object', threshold=num_instances_threshold, split='either') # Ensure there are at least 50 examples to include
 
         if 'crowd' in self.actor_classes:
             self.actor_classes.remove('crowd')
@@ -64,15 +70,16 @@ class MOMADataset(torch.utils.data.Dataset):
             self.real_human_classes = self.actor_classes
             self.actor_classes = ['person']
             
-        self.classes = self.actor_classes + self.object_classes
+        self.classes = ['__background__'] + self.actor_classes + self.object_classes
         self.class_to_ind = {}
+        self.class_to_ind['__background__'] = 0
         if no_human_classes:
-            self.class_to_ind['person'] = 0
+            self.class_to_ind['person'] = 1
         else:
             for idx, actor in enumerate(self.actor_classes):
                 self.class_to_ind[actor] = idx
         for idx, object in enumerate(self.object_classes):
-            self.class_to_ind[object] = len(self.actor_classes) + idx
+            self.class_to_ind[object] = len(self.actor_classes) + idx + 1 # + 1 for background class
             
         self.ind_to_class = {v: k for k, v in self.class_to_ind.items()}
 
@@ -105,6 +112,10 @@ class MOMADataset(torch.utils.data.Dataset):
                 self.rel_id_map[rel[0]] = len(self.rel_id_map)
             self.num_rel_classes = len(self.rel_id_map)
             self.ind_to_relation = {v: k for k, v in self.rel_id_map.items()}
+        
+        pdb.set_trace()
+        # pickle dump ind_to_relation and ind_to_class
+            
         if self.attribute_on:
             for ia in self.moma.taxonomy['ia']:
                 self.att_id_map[ia[0]] = len(self.att_id_map)
@@ -114,12 +125,14 @@ class MOMADataset(torch.utils.data.Dataset):
             self.ind_to_attribute = {v: k for k, v in self.att_id_map.items()}
 
         print("Relation prediction on", len(self.rel_id_map), "classes")
-        # print("Relation list:", self.rel_id_map.keys())
+        print("Relation list:", self.rel_id_map.keys())
         print("Attribute prediction on", len(self.att_id_map), "classes")
-        # print("Attribute list:", self.att_id_map.keys())
+        print("Attribute list:", self.att_id_map.keys())
 
-        # TODO: Implement everything (include relationships) via self.create_dataset()
         self.dataset_dict = self.create_dataset()
+        if self.debug:
+            self.debug_idx = 200
+            print("+ + + + Using file:", self.dataset_dict[self.debug_idx]["file_name"])
         print("DATASET HAS:", self.__len__(), "examples")
 
         if self.relation_on and self.split == 'train' and not op.exists(freq_prior_file):
@@ -170,6 +183,8 @@ class MOMADataset(torch.utils.data.Dataset):
 
     def get_groundtruth(self, index):
         # similar to __getitem__ but without transform
+        if self.debug:
+            index = self.debug_idx
         filename = self.dataset_dict[index]["file_name"]
         boxes = self.dataset_dict[index]["bboxes"]
         labels = torch.Tensor(self.dataset_dict[index]["labels"]).type(torch.int64)
@@ -186,20 +201,22 @@ class MOMADataset(torch.utils.data.Dataset):
 
     def __len__(self):
         if self.debug:
-            return 40 # For faster debugging
+            return 1 # For faster debugging
         return len(self.dataset_dict)
 
     def __getitem__(self, index):
         #if self.split == 'train':
         #    while(random.random() > self.img_info[index]['anti_prop']):
         #        index = int(random.random() * len(self.filenames))
-
+        if self.debug:
+            index = self.debug_idx
+        
         filename = self.dataset_dict[index]["file_name"]
         height = self.dataset_dict[index]["height"]
         width = self.dataset_dict[index]["width"]
         boxes = self.dataset_dict[index]["bboxes"]
         labels = torch.Tensor(self.dataset_dict[index]["labels"]).type(torch.int64)
-
+        
         img = Image.open(filename).convert("RGB")
         if img.size[0] != width or img.size[1] != height:
             print("File:", filename, "does not match metadata!")
@@ -215,7 +232,7 @@ class MOMADataset(torch.utils.data.Dataset):
 
         #if flip_img:
         #    img = img.transpose(method=Image.FLIP_LEFT_RIGHT)
-
+                
         if self.transforms:
             img, boxlist = self.transforms(img, boxlist)
 
@@ -238,6 +255,8 @@ class MOMADataset(torch.utils.data.Dataset):
         return {"height": self.dataset_dict[idx]["height"], "width": self.dataset_dict[idx]["width"]}
     
     def get_img_key(self, idx):
+        if self.debug:
+            return self.debug_idx
         return idx
     
     def create_dataset(self):

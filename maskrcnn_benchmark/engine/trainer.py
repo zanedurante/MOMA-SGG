@@ -16,6 +16,9 @@ from maskrcnn_benchmark.engine.inference import inference
 from maskrcnn_benchmark.utils.amp import autocast, GradScaler
 
 import pdb
+import wandb
+
+USE_WANDB = True
 
 def reduce_loss_dict(loss_dict):
     """
@@ -56,6 +59,14 @@ def do_train(
     arguments,
     meters=None,
 ):
+    if USE_WANDB:
+        project = cfg.MODEL.ROI_RELATION_HEAD.MODE
+        wandb.init(project=project, entity="durante")
+        # TODO: Put important config file information
+        wandb.config = {
+          "learning_rate": cfg.SOLVER.BASE_LR,
+        }
+    
 
     if meters is None:
         meters = MetricLogger(delimiter="  ")
@@ -81,6 +92,7 @@ def do_train(
     #for iteration, data_batch in enumerate(tqdm(data_loader, max_iter-start_iter), start_iter):
     for iteration, data_batch in enumerate(data_loader, start_iter):
         images, targets, image_ids, scales = data_batch[0], data_batch[1], data_batch[2], data_batch[3:]
+        #pdb.set_trace()
         if any(len(target) < 1 for target in targets):
             logger.error(f"Iteration={iteration + 1} || Image Ids used for training {_} || targets Length={[len(target) for target in targets]}" )
             continue
@@ -106,10 +118,14 @@ def do_train(
             )
             loss_dict = loss_dict[0]
         losses = sum(loss for loss in loss_dict.values())
-
+        
         # reduce losses over all GPUs for logging purposes
         loss_dict_reduced = reduce_loss_dict(loss_dict)
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+        
+        if USE_WANDB:
+            wandb.log({"loss": losses_reduced})
+        
         meters.update(loss=losses_reduced, **loss_dict_reduced)
 
         optimizer.zero_grad()

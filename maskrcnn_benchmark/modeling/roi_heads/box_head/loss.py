@@ -13,6 +13,7 @@ from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
 )
 from maskrcnn_benchmark.modeling.utils import cat
 
+import pdb
 
 class FastRCNNLossComputation(object):
     """
@@ -176,7 +177,7 @@ class FastRCNNLossComputation(object):
         regression_targets = cat(
             [proposal.get_field("regression_targets") for proposal in proposals], dim=0
         )
-
+        #pdb.set_trace()
         classification_loss = F.cross_entropy(class_logits, labels)
 
         # get indices that correspond to the regression targets for
