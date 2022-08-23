@@ -17,6 +17,9 @@ from maskrcnn_benchmark.utils.amp import autocast, GradScaler
 
 import pdb
 
+import wandb
+
+
 def reduce_loss_dict(loss_dict):
     """
     Reduce the loss dictionary from all processes so that process with rank
@@ -56,7 +59,12 @@ def do_train(
     arguments,
     meters=None,
 ):
-
+    wandb.init(project="scene-graph-generation", entity="durante")
+    wandb.config = {
+      "learning_rate": cfg.SOLVER.BASE_LR,
+      "score_thresh": cfg.MODEL.ROI_HEADS.SCORE_THRESH,
+      "sg_algo": cfg.MODEL.ROI_RELATION_HEAD.ALGORITHM,
+    }
     if meters is None:
         meters = MetricLogger(delimiter="  ")
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
@@ -110,6 +118,7 @@ def do_train(
         # reduce losses over all GPUs for logging purposes
         loss_dict_reduced = reduce_loss_dict(loss_dict)
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+        wandb.log({"loss":losses_reduced})
         meters.update(loss=losses_reduced, **loss_dict_reduced)
 
         optimizer.zero_grad()

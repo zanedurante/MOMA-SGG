@@ -27,7 +27,11 @@ def build_dataset(cfg, transforms, dataset_catalog, is_train=True):
             construct a dataset.
         is_train (bool): whether to setup the dataset for training or testing
     """
-
+    
+    debug = False
+    if hasattr(cfg, 'DEBUG'):
+        debug = cfg.DEBUG 
+        
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
     factory_list = cfg.DATASETS.FACTORY_TRAIN if is_train else cfg.DATASETS.FACTORY_TEST
     if not isinstance(dataset_list, (list, tuple)):
@@ -57,6 +61,7 @@ def build_dataset(cfg, transforms, dataset_catalog, is_train=True):
             if data["factory"] == "PascalVOCDataset":
                 args["use_difficult"] = not is_train
         args["transforms"] = transforms
+        args["debug"] = debug
         # make dataset from factory
         dataset = factory(**args)
         datasets.append(dataset)
