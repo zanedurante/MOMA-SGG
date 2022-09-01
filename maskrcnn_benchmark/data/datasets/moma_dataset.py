@@ -117,7 +117,7 @@ class MOMADataset(torch.utils.data.Dataset):
             self.num_rel_classes = len(self.rel_id_map)
             self.ind_to_relation = {v: k for k, v in self.rel_id_map.items()}
         
-        pdb.set_trace()
+        #pdb.set_trace()
         # pickle dump ind_to_relation and ind_to_class
             
         if self.attribute_on:
@@ -139,7 +139,7 @@ class MOMADataset(torch.utils.data.Dataset):
             print("+ + + + Using file:", self.dataset_dict[self.debug_idx]["file_name"])
         print("DATASET HAS:", self.__len__(), "examples")
 
-        if self.relation_on and self.split == 'train':# and not op.exists(freq_prior_file):
+        if self.relation_on and self.split == 'train' and not op.exists(freq_prior_file):
             print("Computing frequency prior matrix...")
             fg_matrix, bg_matrix = self._get_freq_prior()
             prob_matrix = fg_matrix.astype(np.float32)

@@ -22,6 +22,7 @@ from .msdn.msdn import build_msdn_model
 from .grcnn.grcnn import build_grcnn_model
 from .reldn.reldn import build_reldn_model
 
+import pdb
 
 class ROIRelationHead(torch.nn.Module):
     """
@@ -241,7 +242,7 @@ class ROIRelationHead(torch.nn.Module):
                                          use_freq_prior=self.cfg.MODEL.USE_FREQ_PRIOR)
 
             return x, result, {}
-
+        #pdb.set_trace()
         loss_obj_classifier = torch.tensor(0, dtype=torch.float).to(pred_class_logits.device)
         if obj_class_logits is not None:
             loss_obj_classifier = self.loss_evaluator.obj_classification_loss(proposals, [obj_class_logits])

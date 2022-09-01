@@ -28,7 +28,7 @@ def keep_only_positive_boxes(boxes):
         labels = boxes_per_image.get_field("labels")
         inds_mask = labels > -1 # Changed from 0
         inds = inds_mask.nonzero(as_tuple=False).squeeze(1)
-        pdb.set_trace()
+        #pdb.set_trace()
         positive_boxes.append(boxes_per_image[inds])
         positive_inds.append(inds_mask)
     return positive_boxes, positive_inds

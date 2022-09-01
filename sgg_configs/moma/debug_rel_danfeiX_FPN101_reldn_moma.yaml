@@ -70,11 +70,8 @@ MODEL:
 #  PIXEL_MEAN: [103.530, 116.280, 123.675]
 DATASETS:
   TRAIN: ("moma_train",)
-<<<<<<< HEAD
-  TEST: ("moma_train",) # Running into error when debugging
-=======
   TEST: ("moma_train",) # See if can overfit the training set
->>>>>>> 9b74927ee1cc2e585a8ec7c15827c822f141e0d3
+  
 DATALOADER:
   SIZE_DIVISIBILITY: 32
   NUM_WORKERS: 4
